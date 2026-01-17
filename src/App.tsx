@@ -199,8 +199,8 @@ function App() {
         <header className="mb-8">
           <div className="flex items-start justify-between mb-2 flex-wrap gap-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Subscription Tracker</h1>
-              <p className="text-gray-600">Manage and track all your subscriptions in one place</p>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Claim Chao-dear</h1>
+              <p className="text-gray-600">Track your subscriptions and claims to fix leaks from the taps</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
