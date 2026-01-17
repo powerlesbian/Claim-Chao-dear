@@ -123,3 +123,29 @@ export const getSortPreference = (): SortOption => {
 export const setSortPreference = (sort: SortOption): void => {
   localStorage.setItem(SORT_KEY, sort);
 };
+
+export const addSubscriptions = async (subscriptions: Omit<Subscription, 'id' | 'createdAt'>[]): Promise<Subscription[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.error('No authenticated user');
+    return [];
+  }
+
+  const subscriptionsToInsert = subscriptions.map(sub => ({
+    ...mapSubscriptionToDb(sub),
+    user_id: user.id,
+  }));
+
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .insert(subscriptionsToInsert)
+    .select();
+
+  if (error) {
+    console.error('Error adding subscriptions:', error);
+    return [];
+  }
+
+  return (data || []).map(mapDbToSubscription);
+};

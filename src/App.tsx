@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut } from 'lucide-react';
+import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption } from './types';
-import { loadSubscriptions, addSubscription, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
+import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments, formatCurrency } from './utils/dates';
 import { convertCurrency, getDisplayCurrency, setDisplayCurrency } from './utils/currency';
 import { useAuth } from './contexts/AuthContext';
@@ -11,6 +11,7 @@ import SubscriptionList from './components/SubscriptionList';
 import UploadStatement from './components/UploadStatement';
 import UpcomingPayments from './components/UpcomingPayments';
 import ScreenshotModal from './components/ScreenshotModal';
+import CSVImport from './components/CSVImport';
 
 type View = 'upcoming' | 'all';
 
@@ -21,6 +22,7 @@ function App() {
   const [view, setView] = useState<View>('upcoming');
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showCSVImport, setShowCSVImport] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
@@ -157,6 +159,15 @@ function App() {
     setUploadedScreenshot(screenshot);
     setShowUpload(false);
     setShowForm(true);
+  };
+
+  const handleCSVImport = async (importedSubscriptions: Omit<Subscription, 'id' | 'createdAt'>[]) => {
+    const newSubscriptions = await addSubscriptions(importedSubscriptions);
+
+    if (newSubscriptions.length > 0) {
+      setSubscriptions([...newSubscriptions, ...subscriptions]);
+      setShowCSVImport(false);
+    }
   };
 
   const activeSubscriptions = subscriptions.filter(sub => !sub.cancelled);
@@ -332,13 +343,22 @@ function App() {
         </div>
 
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg md:relative md:shadow-none md:border-0 md:bg-transparent md:p-0">
-          <div className="max-w-4xl mx-auto flex gap-3">
+          <div className="max-w-4xl mx-auto flex gap-3 flex-wrap">
             <button
               onClick={() => setShowUpload(true)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium md:flex-none md:px-6"
             >
               <Upload size={20} />
-              <span>Upload Statement</span>
+              <span className="hidden sm:inline">Upload Statement</span>
+              <span className="sm:hidden">Statement</span>
+            </button>
+            <button
+              onClick={() => setShowCSVImport(true)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium md:flex-none md:px-6"
+            >
+              <FileUp size={20} />
+              <span className="hidden sm:inline">Import CSV</span>
+              <span className="sm:hidden">CSV</span>
             </button>
             <button
               onClick={() => {
@@ -349,7 +369,8 @@ function App() {
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium md:flex-none md:px-6"
             >
               <Plus size={20} />
-              <span>Add Subscription</span>
+              <span className="hidden sm:inline">Add Subscription</span>
+              <span className="sm:hidden">Add</span>
             </button>
           </div>
         </div>
@@ -378,6 +399,13 @@ function App() {
         <ScreenshotModal
           screenshot={viewingScreenshot}
           onClose={() => setViewingScreenshot(null)}
+        />
+      )}
+
+      {showCSVImport && (
+        <CSVImport
+          onImport={handleCSVImport}
+          onCancel={() => setShowCSVImport(false)}
         />
       )}
     </div>
