@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Lock, Chrome, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Chrome, AlertCircle, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Auth() {
@@ -9,6 +9,7 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showFAQ, setShowFAQ] = useState(false);
   const { signIn, signUp, signInWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,9 +64,12 @@ export default function Auth() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Subscription Tracker
-            </h1>
+            <div className="mb-3">
+              <h1 className="text-3xl font-bold text-gray-900 mb-1">
+                Subscription Tracker
+              </h1>
+              <p className="text-sm text-blue-600 font-medium">by Claim Chao-dear</p>
+            </div>
             <p className="text-gray-600">
               {isSignUp ? 'Create your account' : 'Sign in to your account'}
             </p>
@@ -177,6 +181,69 @@ export default function Auth() {
                 : "Don't have an account? Sign up"}
             </button>
           </div>
+        </div>
+
+        <div className="mt-6">
+          <button
+            onClick={() => setShowFAQ(!showFAQ)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium"
+          >
+            <HelpCircle size={20} />
+            <span>{showFAQ ? 'Hide FAQ' : 'Show FAQ'}</span>
+          </button>
+
+          {showFAQ && (
+            <div className="mt-4 bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">What can I track with this app?</h3>
+                <p className="text-sm text-gray-700">
+                  Track all your recurring subscriptions including streaming services, software licenses, memberships, and any other recurring payments. View upcoming payments and manage your subscription costs across different currencies.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">What currencies are supported?</h3>
+                <p className="text-sm text-gray-700">
+                  Currently supports HKD (Hong Kong Dollar), SGD (Singapore Dollar), and USD (US Dollar). You can set a primary display currency to see total costs converted.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">How do I import subscriptions via CSV?</h3>
+                <p className="text-sm text-gray-700 mb-2">
+                  After signing in, use the "Import CSV" button. Your CSV file must have these columns in this exact order:
+                </p>
+                <div className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto">
+                  Name,Amount,Currency,Frequency,Start Date,Next Payment
+                </div>
+                <p className="text-sm text-gray-700 mt-2">
+                  <strong>Example:</strong>
+                </p>
+                <div className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto">
+                  Netflix,119.00,HKD,Monthly,2026-01-01,2026-02-01
+                </div>
+                <ul className="text-sm text-gray-700 mt-2 space-y-1">
+                  <li><strong>Frequency:</strong> Daily, Weekly, Monthly, or Yearly (case-insensitive)</li>
+                  <li><strong>Currency:</strong> HKD, SGD, or USD</li>
+                  <li><strong>Dates:</strong> Format as YYYY-MM-DD</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Is my data secure?</h3>
+                <p className="text-sm text-gray-700">
+                  Yes, all data is stored securely in a database with row-level security. Only you can access your subscription data. Your password is encrypted and never stored in plain text.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Can I cancel or pause subscriptions?</h3>
+                <p className="text-sm text-gray-700">
+                  You can mark subscriptions as cancelled to track which ones you've stopped. This helps you keep a history of all your subscriptions.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
