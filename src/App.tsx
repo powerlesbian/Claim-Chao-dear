@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle } from 'lucide-react';
+import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption } from './types';
 import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments, formatCurrency } from './utils/dates';
@@ -29,6 +29,7 @@ function App() {
   const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
   const [sortOption, setSortOptionState] = useState<SortOption>(getSortPreference());
   const [showFAQ, setShowFAQ] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -67,6 +68,121 @@ function App() {
         break;
     }
     return convertCurrency(monthlyAmount, subscription.currency, displayCurrency);
+  };
+
+  const detectDuplicates = (subs: Subscription[]): Set<string> => {
+    const duplicateIds = new Set<string>();
+    const seen = new Map<string, string>();
+
+    subs.forEach(sub => {
+      const normalizedName = sub.name.toLowerCase().trim();
+
+      if (seen.has(normalizedName)) {
+        duplicateIds.add(sub.id);
+        duplicateIds.add(seen.get(normalizedName)!);
+      } else {
+        seen.set(normalizedName, sub.id);
+      }
+
+      for (const [existingName, existingId] of seen.entries()) {
+        if (existingName !== normalizedName) {
+          const similarity = calculateSimilarity(normalizedName, existingName);
+          if (similarity > 0.8) {
+            duplicateIds.add(sub.id);
+            duplicateIds.add(existingId);
+          }
+        }
+      }
+    });
+
+    return duplicateIds;
+  };
+
+  const calculateSimilarity = (str1: string, str2: string): number => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+
+    if (longer.length === 0) return 1.0;
+
+    const editDistance = getEditDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  };
+
+  const getEditDistance = (str1: string, str2: string): number => {
+    const matrix: number[][] = [];
+
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+
+    return matrix[str2.length][str1.length];
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Name', 'Amount', 'Currency', 'Frequency', 'Start Date', 'Next Payment', 'Notes', 'Status'];
+
+    const rows = subscriptions.map(sub => {
+      const nextPayment = !sub.cancelled
+        ? new Date(sub.startDate)
+        : null;
+
+      return [
+        sub.name,
+        sub.amount.toFixed(2),
+        sub.currency,
+        sub.frequency.charAt(0).toUpperCase() + sub.frequency.slice(1),
+        sub.startDate,
+        nextPayment ? nextPayment.toISOString().split('T')[0] : 'N/A',
+        sub.notes || '',
+        sub.cancelled ? 'Cancelled' : 'Active'
+      ];
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `subscriptions_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const filterSubscriptions = (subs: Subscription[]): Subscription[] => {
+    if (!searchQuery.trim()) return subs;
+
+    const query = searchQuery.toLowerCase();
+    return subs.filter(sub =>
+      sub.name.toLowerCase().includes(query) ||
+      sub.notes?.toLowerCase().includes(query) ||
+      sub.currency.toLowerCase().includes(query) ||
+      sub.frequency.toLowerCase().includes(query)
+    );
   };
 
   const sortSubscriptions = (subs: Subscription[]): Subscription[] => {
@@ -172,8 +288,10 @@ function App() {
   };
 
   const activeSubscriptions = subscriptions.filter(sub => !sub.cancelled);
-  const sortedSubscriptions = sortSubscriptions(subscriptions);
+  const filteredSubscriptions = filterSubscriptions(subscriptions);
+  const sortedSubscriptions = sortSubscriptions(filteredSubscriptions);
   const sortedUpcomingPayments = getUpcomingPayments(sortedSubscriptions);
+  const duplicateIds = detectDuplicates(subscriptions);
 
   const totalMonthly = activeSubscriptions.reduce((total, sub) => {
     let monthlyAmount = sub.amount;
@@ -211,7 +329,7 @@ function App() {
         <header className="mb-8">
           <div className="flex items-start justify-between mb-2 flex-wrap gap-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Claim Chao-dear</h1>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Claim Chowder</h1>
               <p className="text-gray-600">Track your subscriptions and claims to fix leaks from the taps</p>
             </div>
             <div className="flex items-center gap-3">
@@ -283,49 +401,81 @@ function App() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-          <div className="flex gap-2 border-b border-gray-200">
-            <button
-              onClick={() => setView('upcoming')}
-              className={`px-4 py-2 font-medium transition-colors ${
-                view === 'upcoming'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Upcoming Payments
-            </button>
-            <button
-              onClick={() => setView('all')}
-              className={`px-4 py-2 font-medium transition-colors ${
-                view === 'all'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              All Subscriptions
-            </button>
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+            <div className="flex gap-2 border-b border-gray-200">
+              <button
+                onClick={() => setView('upcoming')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  view === 'upcoming'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Upcoming Payments
+              </button>
+              <button
+                onClick={() => setView('all')}
+                className={`px-4 py-2 font-medium transition-colors ${
+                  view === 'all'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                All Subscriptions
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ArrowUpDown size={18} className="text-gray-600" />
+              <label htmlFor="sortOption" className="text-sm text-gray-600 whitespace-nowrap">
+                Sort by:
+              </label>
+              <select
+                id="sortOption"
+                value={sortOption}
+                onChange={(e) => handleSortChange(e.target.value as SortOption)}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+              >
+                <option value="alphabetical">A-Z</option>
+                <option value="value-high">Highest Value</option>
+                <option value="value-low">Lowest Value</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ArrowUpDown size={18} className="text-gray-600" />
-            <label htmlFor="sortOption" className="text-sm text-gray-600 whitespace-nowrap">
-              Sort by:
-            </label>
-            <select
-              id="sortOption"
-              value={sortOption}
-              onChange={(e) => handleSortChange(e.target.value as SortOption)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-            >
-              <option value="alphabetical">A-Z</option>
-              <option value="value-high">Highest Value</option>
-              <option value="value-low">Lowest Value</option>
-            </select>
-          </div>
+          {view === 'all' && (
+            <div className="flex gap-3 flex-wrap">
+              <div className="flex-1 min-w-[200px] relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search subscriptions..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                onClick={exportToCSV}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                <Download size={20} />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mb-6">
+          {duplicateIds.size > 0 && view === 'all' && (
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">
+                <strong>Potential duplicates detected!</strong> {duplicateIds.size} subscription(s) highlighted in yellow may be duplicates. Please review and edit as needed.
+              </p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-600">Loading subscriptions...</div>
@@ -335,6 +485,7 @@ function App() {
           ) : (
             <SubscriptionList
               subscriptions={sortedSubscriptions}
+              duplicateIds={duplicateIds}
               onEdit={handleEdit}
               onDelete={handleDeleteSubscription}
               onToggleCancelled={handleToggleCancelled}

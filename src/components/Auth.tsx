@@ -68,7 +68,7 @@ export default function Auth() {
               <h1 className="text-3xl font-bold text-gray-900 mb-1">
                 Subscription Tracker
               </h1>
-              <p className="text-sm text-blue-600 font-medium">by Claim Chao-dear</p>
+              <p className="text-sm text-blue-600 font-medium">by Claim Chowder</p>
             </div>
             <p className="text-gray-600">
               {isSignUp ? 'Create your account' : 'Sign in to your account'}
