@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption } from './types';
 import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
-import { getUpcomingPayments, formatCurrency } from './utils/dates';
+import { getUpcomingPayments, formatCurrency, calculateNextPaymentDate } from './utils/dates';
 import { convertCurrency, getDisplayCurrency, setDisplayCurrency } from './utils/currency';
 import { useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
@@ -72,28 +72,40 @@ function App() {
 
   const detectDuplicates = (subs: Subscription[]): Set<string> => {
     const duplicateIds = new Set<string>();
-    const seen = new Map<string, string>();
 
-    subs.forEach(sub => {
-      const normalizedName = sub.name.toLowerCase().trim();
+    for (let i = 0; i < subs.length; i++) {
+      for (let j = i + 1; j < subs.length; j++) {
+        const sub1 = subs[i];
+        const sub2 = subs[j];
 
-      if (seen.has(normalizedName)) {
-        duplicateIds.add(sub.id);
-        duplicateIds.add(seen.get(normalizedName)!);
-      } else {
-        seen.set(normalizedName, sub.id);
-      }
+        const monthlyValue1 = getMonthlyValue(sub1);
+        const monthlyValue2 = getMonthlyValue(sub2);
+        const priceDiff = Math.abs(monthlyValue1 - monthlyValue2);
+        const avgPrice = (monthlyValue1 + monthlyValue2) / 2;
+        const priceMatch = priceDiff / avgPrice < 0.05;
 
-      for (const [existingName, existingId] of seen.entries()) {
-        if (existingName !== normalizedName) {
-          const similarity = calculateSimilarity(normalizedName, existingName);
-          if (similarity > 0.8) {
-            duplicateIds.add(sub.id);
-            duplicateIds.add(existingId);
-          }
+        if (!priceMatch) continue;
+
+        const nextPayment1 = !sub1.cancelled ? calculateNextPaymentDate(sub1.startDate, sub1.frequency) : null;
+        const nextPayment2 = !sub2.cancelled ? calculateNextPaymentDate(sub2.startDate, sub2.frequency) : null;
+
+        let dateMatch = false;
+        if (nextPayment1 && nextPayment2) {
+          const daysDiff = Math.abs(nextPayment1.getTime() - nextPayment2.getTime()) / (1000 * 60 * 60 * 24);
+          dateMatch = daysDiff <= 7;
+        }
+
+        const normalizedName1 = sub1.name.toLowerCase().trim();
+        const normalizedName2 = sub2.name.toLowerCase().trim();
+        const nameSimilarity = calculateSimilarity(normalizedName1, normalizedName2);
+        const nameMatch = nameSimilarity > 0.75;
+
+        if (dateMatch || nameMatch) {
+          duplicateIds.add(sub1.id);
+          duplicateIds.add(sub2.id);
         }
       }
-    });
+    }
 
     return duplicateIds;
   };
