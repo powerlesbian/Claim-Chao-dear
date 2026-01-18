@@ -81,8 +81,7 @@ function App() {
         const monthlyValue1 = getMonthlyValue(sub1);
         const monthlyValue2 = getMonthlyValue(sub2);
         const priceDiff = Math.abs(monthlyValue1 - monthlyValue2);
-        const avgPrice = (monthlyValue1 + monthlyValue2) / 2;
-        const priceMatch = priceDiff / avgPrice < 0.05;
+        const priceMatch = priceDiff < 0.01;
 
         if (!priceMatch) continue;
 
@@ -91,16 +90,21 @@ function App() {
 
         let dateMatch = false;
         if (nextPayment1 && nextPayment2) {
-          const daysDiff = Math.abs(nextPayment1.getTime() - nextPayment2.getTime()) / (1000 * 60 * 60 * 24);
-          dateMatch = daysDiff <= 7;
+          const date1 = nextPayment1.toISOString().split('T')[0];
+          const date2 = nextPayment2.toISOString().split('T')[0];
+          dateMatch = date1 === date2;
+        } else if (!nextPayment1 && !nextPayment2) {
+          dateMatch = true;
         }
+
+        if (!dateMatch) continue;
 
         const normalizedName1 = sub1.name.toLowerCase().trim();
         const normalizedName2 = sub2.name.toLowerCase().trim();
         const nameSimilarity = calculateSimilarity(normalizedName1, normalizedName2);
-        const nameMatch = nameSimilarity > 0.75;
+        const nameMatch = nameSimilarity > 0.9;
 
-        if (dateMatch || nameMatch) {
+        if (nameMatch) {
           duplicateIds.add(sub1.id);
           duplicateIds.add(sub2.id);
         }
