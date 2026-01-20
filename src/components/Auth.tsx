@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Lock, Chrome, AlertCircle, HelpCircle } from 'lucide-react';
+import { Mail, Lock, Chrome, AlertCircle, HelpCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Auth() {
@@ -10,6 +10,8 @@ export default function Auth() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showFAQ, setShowFAQ] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { signIn, signUp, signInWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,7 +68,7 @@ export default function Auth() {
           <div className="text-center mb-8">
             <div className="mb-3">
               <h1 className="text-3xl font-bold text-gray-900 mb-1">
-                Subscription Tracker
+                Payments Tracker
               </h1>
               <p className="text-sm text-blue-600 font-medium">by Claim Chowder</p>
             </div>
@@ -108,15 +110,22 @@ export default function Auth() {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter your password"
                   required
                   minLength={6}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
             </div>
 
@@ -128,15 +137,22 @@ export default function Auth() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                   <input
-                    type="password"
+                    type={showConfirmPassword ? "text" : "password"}
                     id="confirmPassword"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Confirm your password"
                     required
                     minLength={6}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
                 </div>
               </div>
             )}
@@ -197,7 +213,7 @@ export default function Auth() {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">What can I track with this app?</h3>
                 <p className="text-sm text-gray-700">
-                  Track all your recurring subscriptions including streaming services, software licenses, memberships, and any other recurring payments. View upcoming payments and manage your subscription costs across different currencies.
+                  Track all your recurring and one-off payments including streaming services, software licenses, memberships, purchases, and any other payments. View upcoming payments and manage your costs across different currencies.
                 </p>
               </div>
 
@@ -209,7 +225,7 @@ export default function Auth() {
               </div>
 
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">How do I import subscriptions via CSV?</h3>
+                <h3 className="font-semibold text-gray-900 mb-2">How do I import payments via CSV?</h3>
                 <p className="text-sm text-gray-700 mb-2">
                   After signing in, use the "Import CSV" button. Your CSV file must have these columns in this exact order:
                 </p>
@@ -223,7 +239,7 @@ export default function Auth() {
                   Netflix,119.00,HKD,Monthly,2026-01-01,2026-02-01
                 </div>
                 <ul className="text-sm text-gray-700 mt-2 space-y-1">
-                  <li><strong>Frequency:</strong> Daily, Weekly, Monthly, or Yearly (case-insensitive)</li>
+                  <li><strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off (case-insensitive)</li>
                   <li><strong>Currency:</strong> HKD, SGD, or USD</li>
                   <li><strong>Dates:</strong> Format as YYYY-MM-DD</li>
                 </ul>
@@ -232,14 +248,14 @@ export default function Auth() {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Is my data secure?</h3>
                 <p className="text-sm text-gray-700">
-                  Yes, all data is stored securely in a database with row-level security. Only you can access your subscription data. Your password is encrypted and never stored in plain text.
+                  Yes, all data is stored securely in a database with row-level security. Only you can access your payment data. Your password is encrypted and never stored in plain text.
                 </p>
               </div>
 
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Can I cancel or pause subscriptions?</h3>
+                <h3 className="font-semibold text-gray-900 mb-2">Can I cancel or pause payments?</h3>
                 <p className="text-sm text-gray-700">
-                  You can mark subscriptions as cancelled to track which ones you've stopped. This helps you keep a history of all your subscriptions.
+                  You can mark payments as cancelled to track which ones you've stopped. This helps you keep a history of all your payments.
                 </p>
               </div>
             </div>

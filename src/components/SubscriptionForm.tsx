@@ -132,6 +132,7 @@ export default function SubscriptionForm({ onSubmit, onCancel, initialData }: Su
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
+              <option value="one-off">One-off</option>
             </select>
           </div>
 

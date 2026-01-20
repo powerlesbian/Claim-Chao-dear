@@ -66,6 +66,9 @@ function App() {
       case 'yearly':
         monthlyAmount = subscription.amount / 12;
         break;
+      case 'one-off':
+        monthlyAmount = 0;
+        break;
     }
     return convertCurrency(monthlyAmount, subscription.currency, displayCurrency);
   };
@@ -321,6 +324,9 @@ function App() {
       case 'yearly':
         monthlyAmount = sub.amount / 12;
         break;
+      case 'one-off':
+        monthlyAmount = 0;
+        break;
     }
 
     const convertedAmount = convertCurrency(monthlyAmount, sub.currency, displayCurrency);
@@ -346,7 +352,7 @@ function App() {
           <div className="flex items-start justify-between mb-2 flex-wrap gap-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Claim Chowder</h1>
-              <p className="text-gray-600">Track your subscriptions and claims to fix leaks from the taps</p>
+              <p className="text-gray-600">Track your payments and claims to fix leaks from the taps</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
@@ -438,7 +444,7 @@ function App() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                All Subscriptions
+                All Payments
               </button>
             </div>
 
@@ -468,7 +474,7 @@ function App() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search subscriptions..."
+                  placeholder="Search payments..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -487,14 +493,14 @@ function App() {
           {duplicateIds.size > 0 && view === 'all' && (
             <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-sm text-yellow-800">
-                <strong>Potential duplicates detected!</strong> {duplicateIds.size} subscription(s) highlighted in yellow may be duplicates. Please review and edit as needed.
+                <strong>Potential duplicates detected!</strong> {duplicateIds.size} payment(s) highlighted in yellow may be duplicates. Please review and edit as needed.
               </p>
             </div>
           )}
 
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-gray-600">Loading subscriptions...</div>
+              <div className="text-gray-600">Loading payments...</div>
             </div>
           ) : view === 'upcoming' ? (
             <UpcomingPayments payments={sortedUpcomingPayments} />
@@ -537,7 +543,7 @@ function App() {
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium md:flex-none md:px-6"
             >
               <Plus size={20} />
-              <span className="hidden sm:inline">Add Subscription</span>
+              <span className="hidden sm:inline">Add Payment</span>
               <span className="sm:hidden">Add</span>
             </button>
           </div>
@@ -557,7 +563,7 @@ function App() {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">What can I track with this app?</h3>
                 <p className="text-sm text-gray-700">
-                  Track all your recurring subscriptions including streaming services, software licenses, memberships, and any other recurring payments. View upcoming payments and manage your subscription costs across different currencies.
+                  Track all your recurring and one-off payments including streaming services, software licenses, memberships, purchases, and any other payments. View upcoming payments and manage your costs across different currencies.
                 </p>
               </div>
 
@@ -569,7 +575,7 @@ function App() {
               </div>
 
               <div>
-                <h3 className="font-semibold text-gray-900 mb-2">How do I import subscriptions via CSV?</h3>
+                <h3 className="font-semibold text-gray-900 mb-2">How do I import payments via CSV?</h3>
                 <p className="text-sm text-gray-700 mb-2">
                   Click the "Import CSV" button. Your CSV file must have these columns in this exact order:
                 </p>
@@ -583,7 +589,7 @@ function App() {
                   Netflix,119.00,HKD,Monthly,2026-01-01,2026-02-01
                 </div>
                 <ul className="text-sm text-gray-700 mt-2 space-y-1">
-                  <li><strong>Frequency:</strong> Daily, Weekly, Monthly, or Yearly (case-insensitive)</li>
+                  <li><strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off (case-insensitive)</li>
                   <li><strong>Currency:</strong> HKD, SGD, or USD</li>
                   <li><strong>Dates:</strong> Format as YYYY-MM-DD</li>
                   <li><strong>Note:</strong> The "Next Payment" column is required in the CSV but the app calculates payment dates automatically based on start date and frequency</li>
@@ -607,7 +613,7 @@ function App() {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Is my data secure?</h3>
                 <p className="text-sm text-gray-700">
-                  Yes, all data is stored securely in a database with row-level security. Only you can access your subscription data. Your password is encrypted and never stored in plain text.
+                  Yes, all data is stored securely in a database with row-level security. Only you can access your payment data. Your password is encrypted and never stored in plain text.
                 </p>
               </div>
 
@@ -622,6 +628,7 @@ function App() {
                   <li>Stores screenshots as base64 data (may impact performance with many large images)</li>
                   <li>Does not send payment reminders or notifications</li>
                   <li>Cannot automatically sync with your bank accounts</li>
+                  <li>One-off payments are not included in monthly total calculations</li>
                 </ul>
               </div>
             </div>

@@ -1,4 +1,4 @@
-export type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one-off';
 export type CurrencyType = 'HKD' | 'SGD' | 'USD';
 export type SortOption = 'alphabetical' | 'value-high' | 'value-low';
 
