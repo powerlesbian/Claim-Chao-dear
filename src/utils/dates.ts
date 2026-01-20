@@ -63,14 +63,16 @@ export const formatDate = (date: string | Date): string => {
 };
 
 export const formatCurrency = (amount: number, currency: 'HKD' | 'SGD' | 'USD' = 'HKD'): string => {
-  const localeMap = {
-    HKD: 'en-HK',
-    SGD: 'en-SG',
-    USD: 'en-US'
+  const currencySymbols = {
+    HKD: 'HK$',
+    SGD: 'S$',
+    USD: 'US$'
   };
 
-  return new Intl.NumberFormat(localeMap[currency], {
-    style: 'currency',
-    currency
-  }).format(amount);
+  const formatted = amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  return `${currencySymbols[currency]}${formatted}`;
 };
