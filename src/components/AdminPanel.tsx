@@ -9,7 +9,6 @@ import ClaimsDashboard from './ClaimsDashboard';
 interface Profile {
   id: string;
   email: string;
-  is_admin: boolean;
   created_at: string;
 }
 
