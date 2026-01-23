@@ -730,6 +730,7 @@ function App() {
         <UploadStatement
           onUpload={handleUploadComplete}
           onCancel={() => setShowUpload(false)}
+          onImportSubscriptions={handleCSVImport}
         />
       )}
 
