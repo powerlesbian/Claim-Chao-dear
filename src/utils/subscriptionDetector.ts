@@ -4,7 +4,7 @@ export interface DetectedSubscription {
   name: string;
   amount: number;
   frequency: 'monthly' | 'yearly';
-  category: 'Entertainment' | 'Productivity' | 'Utilities' | 'Finance' | 'Health & Fitness' | 'Education' | 'Shopping' | 'Other';
+  category: string;
   confidence: number;
   transactions: Transaction[];
 }
@@ -41,10 +41,11 @@ const CATEGORY_KEYWORDS = {
     'course', 'learning', 'education', 'school', 'university', 'training',
     'udemy', 'coursera', 'skillshare', 'masterclass', 'duolingo', 'tutoring'
   ],
-  'Shopping': [
-    'amazon prime', 'costco', 'membership', 'delivery', 'subscription box',
-    'meal kit', 'walmart', 'target', 'instacart', 'shipt'
-  ]
+  'non-Claim': [
+    'claim', 'reimbursement', 'expense', 'report'
+  ],
+  'HowCh': [],
+  'RomCh': []
 };
 
 function normalizeDescription(desc: string): string {
@@ -84,12 +85,12 @@ function hasSubscriptionKeywords(description: string): boolean {
   );
 }
 
-function detectCategory(description: string): 'Entertainment' | 'Productivity' | 'Utilities' | 'Finance' | 'Health & Fitness' | 'Education' | 'Shopping' | 'Other' {
+function detectCategory(description: string): string {
   const normalized = normalizeDescription(description);
 
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some(keyword => normalized.includes(keyword))) {
-      return category as 'Entertainment' | 'Productivity' | 'Utilities' | 'Finance' | 'Health & Fitness' | 'Education' | 'Shopping';
+      return category;
     }
   }
 

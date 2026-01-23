@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Edit2, Trash2, CheckCircle, XCircle, Image, Filter } from 'lucide-react';
-import { Subscription, CategoryType } from '../types';
+import { Subscription, Category } from '../types';
 import { formatCurrency, formatDate, calculateNextPaymentDate } from '../utils/dates';
+import { supabase } from '../lib/supabase';
 
 interface SubscriptionListProps {
   subscriptions: Subscription[];
@@ -20,7 +21,26 @@ export default function SubscriptionList({
   onToggleCancelled,
   onViewScreenshot
 }: SubscriptionListProps) {
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'All'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
 
   if (subscriptions.length === 0) {
     return (
@@ -44,18 +64,15 @@ export default function SubscriptionList({
         <Filter size={20} className="text-gray-600" />
         <select
           value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value as CategoryType | 'All')}
+          onChange={(e) => setSelectedCategory(e.target.value)}
           className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         >
           <option value="All">All Categories</option>
-          <option value="Entertainment">Entertainment</option>
-          <option value="Productivity">Productivity</option>
-          <option value="Utilities">Utilities</option>
-          <option value="Finance">Finance</option>
-          <option value="Health & Fitness">Health & Fitness</option>
-          <option value="Education">Education</option>
-          <option value="Shopping">Shopping</option>
-          <option value="Other">Other</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.name}>
+              {cat.name}
+            </option>
+          ))}
         </select>
         {selectedCategory !== 'All' && (
           <span className="text-sm text-gray-600">

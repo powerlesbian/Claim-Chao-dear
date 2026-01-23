@@ -49,7 +49,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
       const frequency = values[frequencyIndex].toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'yearly';
       const startDate = values[startDateIndex];
       const category = categoryIndex >= 0 && values[categoryIndex]
-        ? values[categoryIndex] as 'Entertainment' | 'Productivity' | 'Utilities' | 'Finance' | 'Health & Fitness' | 'Education' | 'Shopping' | 'Other'
+        ? values[categoryIndex]
         : 'Other';
 
       if (!name || isNaN(amount)) {
@@ -152,7 +152,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
             <p className="text-sm text-gray-600 mt-2">
               <strong>Frequency:</strong> Daily, Weekly, Monthly, or Yearly<br />
               <strong>Currency:</strong> HKD, SGD, or USD<br />
-              <strong>Category (optional):</strong> Entertainment, Productivity, Utilities, Finance, Health & Fitness, Education, Shopping, or Other
+              <strong>Category (optional):</strong> Any category from your list (defaults to "Other")
             </p>
           </div>
 

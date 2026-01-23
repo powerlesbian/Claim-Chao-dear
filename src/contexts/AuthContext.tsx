@@ -22,9 +22,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkAdminStatus = async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', userId)
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (error) {
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      return data?.is_admin ?? false;
+      return data?.role === 'admin';
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;

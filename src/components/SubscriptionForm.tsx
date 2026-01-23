@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { FrequencyType, CurrencyType, CategoryType, Subscription } from '../types';
+import { FrequencyType, CurrencyType, Subscription, Category } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface SubscriptionFormProps {
   onSubmit: (subscription: Omit<Subscription, 'id' | 'createdAt'>) => void;
@@ -19,8 +20,27 @@ export default function SubscriptionForm({ onSubmit, onCancel, initialData }: Su
     return new Date().toISOString().split('T')[0];
   });
   const [frequency, setFrequency] = useState<FrequencyType>(initialData?.frequency || 'monthly');
-  const [category, setCategory] = useState<CategoryType>(initialData?.category || 'Other');
+  const [category, setCategory] = useState<string>(initialData?.category || 'Other');
   const [notes, setNotes] = useState(initialData?.notes || '');
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,18 +165,15 @@ export default function SubscriptionForm({ onSubmit, onCancel, initialData }: Su
             <select
               id="category"
               value={category}
-              onChange={(e) => setCategory(e.target.value as CategoryType)}
+              onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             >
-              <option value="Entertainment">Entertainment</option>
-              <option value="Productivity">Productivity</option>
-              <option value="Utilities">Utilities</option>
-              <option value="Finance">Finance</option>
-              <option value="Health & Fitness">Health & Fitness</option>
-              <option value="Education">Education</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Other">Other</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
 
