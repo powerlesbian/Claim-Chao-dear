@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Mail, Lock, Chrome, AlertCircle, HelpCircle, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mail, Lock, Chrome, AlertCircle, HelpCircle, Eye, EyeOff, Database } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { checkLocalStorageData } from '../utils/localStorageRecovery';
 
 export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -12,7 +13,12 @@ export default function Auth() {
   const [showFAQ, setShowFAQ] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [hasLocalData, setHasLocalData] = useState(false);
   const { signIn, signUp, signInWithGoogle } = useAuth();
+
+  useEffect(() => {
+    setHasLocalData(checkLocalStorageData());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +82,22 @@ export default function Auth() {
               {isSignUp ? 'Create your account' : 'Sign in to your account'}
             </p>
           </div>
+
+          {hasLocalData && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Database className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+                <div className="flex-1">
+                  <p className="text-sm text-blue-900 font-medium mb-1">
+                    Local data detected!
+                  </p>
+                  <p className="text-sm text-blue-800">
+                    Your subscriptions are saved in browser storage. {isSignUp ? 'Create an account' : 'Sign in'} to automatically import them into your secure database.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
