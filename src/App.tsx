@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download, Shield } from 'lucide-react';
+import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download, Shield, Settings } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption } from './types';
 import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments, formatCurrency, calculateNextPaymentDate } from './utils/dates';
@@ -13,8 +13,9 @@ import UpcomingPayments from './components/UpcomingPayments';
 import ScreenshotModal from './components/ScreenshotModal';
 import CSVImport from './components/CSVImport';
 import { AdminPanel } from './components/AdminPanel';
+import { AdminSetup } from './components/AdminSetup';
 
-type View = 'upcoming' | 'all' | 'admin';
+type View = 'upcoming' | 'all' | 'admin' | 'setup';
 
 function App() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
@@ -346,6 +347,10 @@ function App() {
     return <Auth />;
   }
 
+  if (view === 'setup') {
+    return <AdminSetup />;
+  }
+
   if (view === 'admin' && isAdmin) {
     return (
       <div>
@@ -395,7 +400,7 @@ function App() {
                   <option value="USD">USD</option>
                 </select>
               </div>
-              {isAdmin && (
+{isAdmin && (
                 <button
                   onClick={() => setView('admin')}
                   className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
@@ -404,6 +409,13 @@ function App() {
                   <Shield size={18} />
                 </button>
               )}
+              <button
+                onClick={() => setView('setup')}
+                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Admin Setup"
+              >
+                <Settings size={18} />
+              </button>
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
