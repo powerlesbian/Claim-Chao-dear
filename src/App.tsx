@@ -1,300 +1,89 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download, Shield, Database } from 'lucide-react';
-import { Subscription, CurrencyType, SortOption } from './types';
-import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
-import { getUpcomingPayments, formatCurrency, calculateNextPaymentDate } from './utils/dates';
+import { Plus, Upload, DollarSign, Calendar, List } from 'lucide-react';
+import { Subscription, CurrencyType } from './types';
+import { loadSubscriptions, saveSubscriptions, updateSubscription, deleteSubscription } from './utils/storage';
+import { getUpcomingPayments, formatCurrency } from './utils/dates';
 import { convertCurrency, getDisplayCurrency, setDisplayCurrency } from './utils/currency';
-import { checkLocalStorageData } from './utils/localStorageRecovery';
-import { useAuth } from './contexts/AuthContext';
-import Auth from './components/Auth';
 import SubscriptionForm from './components/SubscriptionForm';
 import SubscriptionList from './components/SubscriptionList';
 import UploadStatement from './components/UploadStatement';
 import UpcomingPayments from './components/UpcomingPayments';
 import ScreenshotModal from './components/ScreenshotModal';
-import CSVImport from './components/CSVImport';
-import LocalStorageRecovery from './components/LocalStorageRecovery';
-import { AdminPanel } from './components/AdminPanel';
 
-type View = 'upcoming' | 'all' | 'admin';
+type View = 'upcoming' | 'all';
 
 function App() {
-  const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('upcoming');
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [showCSVImport, setShowCSVImport] = useState(false);
-  const [showRecovery, setShowRecovery] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
-  const [sortOption, setSortOptionState] = useState<SortOption>(getSortPreference());
-  const [showFAQ, setShowFAQ] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hasLocalData, setHasLocalData] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      loadData();
-      setHasLocalData(checkLocalStorageData());
-    }
-  }, [user]);
-
-  const loadData = async () => {
-    setLoading(true);
-    const loaded = await loadSubscriptions();
+    const loaded = loadSubscriptions();
     setSubscriptions(loaded);
-    setLoading(false);
-
-    // Auto-detect if we should show recovery modal
-    if (loaded.length === 0 && checkLocalStorageData()) {
-      setShowRecovery(true);
-    }
-  };
+  }, []);
 
   const handleCurrencyChange = (currency: CurrencyType) => {
     setDisplayCurrencyState(currency);
     setDisplayCurrency(currency);
   };
 
-  const handleSortChange = (sort: SortOption) => {
-    setSortOptionState(sort);
-    setSortPreference(sort);
-  };
-
-  const getMonthlyValue = (subscription: Subscription): number => {
-    let monthlyAmount = subscription.amount;
-    switch (subscription.frequency) {
-      case 'daily':
-        monthlyAmount = subscription.amount * 30;
-        break;
-      case 'weekly':
-        monthlyAmount = subscription.amount * 4;
-        break;
-      case 'yearly':
-        monthlyAmount = subscription.amount / 12;
-        break;
-      case 'one-off':
-        monthlyAmount = 0;
-        break;
-    }
-    return convertCurrency(monthlyAmount, subscription.currency, displayCurrency);
-  };
-
-  const detectDuplicates = (subs: Subscription[]): Set<string> => {
-    const duplicateIds = new Set<string>();
-
-    for (let i = 0; i < subs.length; i++) {
-      for (let j = i + 1; j < subs.length; j++) {
-        const sub1 = subs[i];
-        const sub2 = subs[j];
-
-        const monthlyValue1 = getMonthlyValue(sub1);
-        const monthlyValue2 = getMonthlyValue(sub2);
-        const priceDiff = Math.abs(monthlyValue1 - monthlyValue2);
-        const priceMatch = priceDiff < 0.01;
-
-        if (!priceMatch) continue;
-
-        const nextPayment1 = !sub1.cancelled ? calculateNextPaymentDate(sub1.startDate, sub1.frequency) : null;
-        const nextPayment2 = !sub2.cancelled ? calculateNextPaymentDate(sub2.startDate, sub2.frequency) : null;
-
-        let dateMatch = false;
-        if (nextPayment1 && nextPayment2) {
-          const date1 = nextPayment1.toISOString().split('T')[0];
-          const date2 = nextPayment2.toISOString().split('T')[0];
-          dateMatch = date1 === date2;
-        } else if (!nextPayment1 && !nextPayment2) {
-          dateMatch = true;
-        }
-
-        if (!dateMatch) continue;
-
-        const normalizedName1 = sub1.name.toLowerCase().trim();
-        const normalizedName2 = sub2.name.toLowerCase().trim();
-        const nameSimilarity = calculateSimilarity(normalizedName1, normalizedName2);
-        const nameMatch = nameSimilarity > 0.9;
-
-        if (nameMatch) {
-          duplicateIds.add(sub1.id);
-          duplicateIds.add(sub2.id);
-        }
-      }
-    }
-
-    return duplicateIds;
-  };
-
-  const calculateSimilarity = (str1: string, str2: string): number => {
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
-
-    if (longer.length === 0) return 1.0;
-
-    const editDistance = getEditDistance(longer, shorter);
-    return (longer.length - editDistance) / longer.length;
-  };
-
-  const getEditDistance = (str1: string, str2: string): number => {
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
-      }
-    }
-
-    return matrix[str2.length][str1.length];
-  };
-
-  const exportToCSV = () => {
-    const headers = ['Name', 'Amount', 'Currency', 'Frequency', 'Start Date', 'Next Payment', 'Notes', 'Status'];
-
-    const rows = subscriptions.map(sub => {
-      const nextPayment = !sub.cancelled
-        ? new Date(sub.startDate)
-        : null;
-
-      return [
-        sub.name,
-        sub.amount.toFixed(2),
-        sub.currency,
-        sub.frequency.charAt(0).toUpperCase() + sub.frequency.slice(1),
-        sub.startDate,
-        nextPayment ? nextPayment.toISOString().split('T')[0] : 'N/A',
-        sub.notes || '',
-        sub.cancelled ? 'Cancelled' : 'Active'
-      ];
-    });
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute('href', url);
-    link.setAttribute('download', `subscriptions_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const filterSubscriptions = (subs: Subscription[]): Subscription[] => {
-    if (!searchQuery.trim()) return subs;
-
-    const query = searchQuery.toLowerCase();
-    return subs.filter(sub =>
-      sub.name.toLowerCase().includes(query) ||
-      sub.notes?.toLowerCase().includes(query) ||
-      sub.currency.toLowerCase().includes(query) ||
-      sub.frequency.toLowerCase().includes(query)
-    );
-  };
-
-  const sortSubscriptions = (subs: Subscription[]): Subscription[] => {
-    const sorted = [...subs];
-    switch (sortOption) {
-      case 'alphabetical':
-        return sorted.sort((a, b) => a.name.localeCompare(b.name));
-      case 'value-high':
-        return sorted.sort((a, b) => getMonthlyValue(b) - getMonthlyValue(a));
-      case 'value-low':
-        return sorted.sort((a, b) => getMonthlyValue(a) - getMonthlyValue(b));
-      default:
-        return sorted;
-    }
-  };
-
-  const handleAddSubscription = async (data: Omit<Subscription, 'id' | 'createdAt'>) => {
-    const subscriptionData = {
+  const handleAddSubscription = (data: Omit<Subscription, 'id' | 'createdAt'>) => {
+    const newSubscription: Subscription = {
       ...data,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
       screenshot: uploadedScreenshot || data.screenshot
     };
 
-    const newSubscription = await addSubscription(subscriptionData);
-
-    if (newSubscription) {
-      setSubscriptions([newSubscription, ...subscriptions]);
-      setShowForm(false);
-      setEditingSubscription(null);
-      setUploadedScreenshot(null);
-    }
+    const updated = [...subscriptions, newSubscription];
+    setSubscriptions(updated);
+    saveSubscriptions(updated);
+    setShowForm(false);
+    setEditingSubscription(null);
+    setUploadedScreenshot(null);
   };
 
-  const handleUpdateSubscription = async (data: Omit<Subscription, 'id' | 'createdAt'>) => {
+  const handleUpdateSubscription = (data: Omit<Subscription, 'id' | 'createdAt'>) => {
     if (!editingSubscription) return;
 
-    const updatedData = {
-      ...data,
-      screenshot: uploadedScreenshot || data.screenshot
-    };
+    const updated = subscriptions.map(sub =>
+      sub.id === editingSubscription.id
+        ? { ...sub, ...data, screenshot: uploadedScreenshot || data.screenshot }
+        : sub
+    );
 
-    const success = await updateSubscription(editingSubscription.id, updatedData);
-
-    if (success) {
-      const updated = subscriptions.map(sub =>
-        sub.id === editingSubscription.id
-          ? { ...sub, ...updatedData }
-          : sub
-      );
-      setSubscriptions(updated);
-      setShowForm(false);
-      setEditingSubscription(null);
-      setUploadedScreenshot(null);
-    }
+    setSubscriptions(updated);
+    saveSubscriptions(updated);
+    updateSubscription(editingSubscription.id, data);
+    setShowForm(false);
+    setEditingSubscription(null);
+    setUploadedScreenshot(null);
   };
 
-  const handleDeleteSubscription = async (id: string) => {
-    const success = await deleteSubscription(id);
-
-    if (success) {
-      const updated = subscriptions.filter(sub => sub.id !== id);
-      setSubscriptions(updated);
-    }
+  const handleDeleteSubscription = (id: string) => {
+    const updated = subscriptions.filter(sub => sub.id !== id);
+    setSubscriptions(updated);
+    deleteSubscription(id);
   };
 
-  const handleToggleCancelled = async (id: string, cancelled: boolean) => {
-    const success = await updateSubscription(id, {
-      cancelled,
-      cancelledDate: cancelled ? new Date().toISOString() : undefined
-    });
+  const handleToggleCancelled = (id: string, cancelled: boolean) => {
+    const updated = subscriptions.map(sub =>
+      sub.id === id
+        ? {
+            ...sub,
+            cancelled,
+            cancelledDate: cancelled ? new Date().toISOString() : undefined
+          }
+        : sub
+    );
 
-    if (success) {
-      const updated = subscriptions.map(sub =>
-        sub.id === id
-          ? {
-              ...sub,
-              cancelled,
-              cancelledDate: cancelled ? new Date().toISOString() : undefined
-            }
-          : sub
-      );
-      setSubscriptions(updated);
-    }
+    setSubscriptions(updated);
+    saveSubscriptions(updated);
   };
 
   const handleEdit = (subscription: Subscription) => {
@@ -308,30 +97,8 @@ function App() {
     setShowForm(true);
   };
 
-  const handleCSVImport = async (importedSubscriptions: Omit<Subscription, 'id' | 'createdAt'>[]) => {
-    const newSubscriptions = await addSubscriptions(importedSubscriptions);
-
-    if (newSubscriptions.length > 0) {
-      setSubscriptions([...newSubscriptions, ...subscriptions]);
-      setShowCSVImport(false);
-    }
-  };
-
-  const handleRecovery = async (recoveredSubscriptions: Omit<Subscription, 'id' | 'createdAt'>[]) => {
-    const newSubscriptions = await addSubscriptions(recoveredSubscriptions);
-
-    if (newSubscriptions.length > 0) {
-      setSubscriptions([...newSubscriptions, ...subscriptions]);
-      setShowRecovery(false);
-      setHasLocalData(false);
-    }
-  };
-
   const activeSubscriptions = subscriptions.filter(sub => !sub.cancelled);
-  const filteredSubscriptions = filterSubscriptions(subscriptions);
-  const sortedSubscriptions = sortSubscriptions(filteredSubscriptions);
-  const sortedUpcomingPayments = getUpcomingPayments(sortedSubscriptions);
-  const duplicateIds = detectDuplicates(subscriptions);
+  const upcomingPayments = getUpcomingPayments(subscriptions);
 
   const totalMonthly = activeSubscriptions.reduce((total, sub) => {
     let monthlyAmount = sub.amount;
@@ -345,92 +112,35 @@ function App() {
       case 'yearly':
         monthlyAmount = sub.amount / 12;
         break;
-      case 'one-off':
-        monthlyAmount = 0;
-        break;
     }
 
     const convertedAmount = convertCurrency(monthlyAmount, sub.currency, displayCurrency);
     return total + convertedAmount;
   }, 0);
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Auth />;
-  }
-
-  if (view === 'admin' && isAdmin) {
-    return (
-      <div>
-        <div className="bg-white border-b border-gray-200 px-4 py-3">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <button
-              onClick={() => setView('upcoming')}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              ← Back to App
-            </button>
-            <button
-              onClick={() => signOut()}
-              className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
-        <AdminPanel />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       <div className="max-w-4xl mx-auto px-4 py-6 pb-24 md:py-8">
         <header className="mb-8">
-          <div className="flex items-start justify-between mb-2 flex-wrap gap-4">
+          <div className="flex items-start justify-between mb-2">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Claim Chowder</h1>
-              <p className="text-gray-600">Track your payments and claims to fix leaks from the taps</p>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Subscription Tracker</h1>
+              <p className="text-gray-600">Manage and track all your subscriptions in one place</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <label htmlFor="displayCurrency" className="text-sm text-gray-600 whitespace-nowrap">
-                  Display in:
-                </label>
-                <select
-                  id="displayCurrency"
-                  value={displayCurrency}
-                  onChange={(e) => handleCurrencyChange(e.target.value as CurrencyType)}
-                  className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-                >
-                  <option value="HKD">HKD</option>
-                  <option value="SGD">SGD</option>
-                  <option value="USD">USD</option>
-                </select>
-              </div>
-{isAdmin && (
-                <button
-                  onClick={() => setView('admin')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  title="Admin Panel"
-                >
-                  <Shield size={18} />
-                </button>
-              )}
-              <button
-                onClick={() => signOut()}
-                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Sign out"
+            <div className="flex items-center gap-2">
+              <label htmlFor="displayCurrency" className="text-sm text-gray-600 whitespace-nowrap">
+                Display in:
+              </label>
+              <select
+                id="displayCurrency"
+                value={displayCurrency}
+                onChange={(e) => handleCurrencyChange(e.target.value as CurrencyType)}
+                className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
               >
-                <LogOut size={18} />
-              </button>
+                <option value="HKD">HKD</option>
+                <option value="SGD">SGD</option>
+                <option value="USD">USD</option>
+              </select>
             </div>
           </div>
         </header>
@@ -470,122 +180,42 @@ function App() {
               <div>
                 <p className="text-sm text-gray-600">Due This Week</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {sortedUpcomingPayments.filter(p => p.daysUntil <= 7).length}
+                  {upcomingPayments.filter(p => p.daysUntil <= 7).length}
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {hasLocalData && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <Database className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-                <div className="flex-1">
-                  <p className="text-sm text-blue-900 font-medium mb-1">
-                    Local data detected!
-                  </p>
-                  <p className="text-sm text-blue-800">
-                    You have subscription data stored in your browser from before the Supabase migration. Click "Recover Data" to import it.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowRecovery(true)}
-                className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-              >
-                Recover Data
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
-            <div className="flex gap-2 border-b border-gray-200">
-              <button
-                onClick={() => setView('upcoming')}
-                className={`px-4 py-2 font-medium transition-colors ${
-                  view === 'upcoming'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Upcoming Payments
-              </button>
-              <button
-                onClick={() => setView('all')}
-                className={`px-4 py-2 font-medium transition-colors ${
-                  view === 'all'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                All Payments
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <ArrowUpDown size={18} className="text-gray-600" />
-              <label htmlFor="sortOption" className="text-sm text-gray-600 whitespace-nowrap">
-                Sort by:
-              </label>
-              <select
-                id="sortOption"
-                value={sortOption}
-                onChange={(e) => handleSortChange(e.target.value as SortOption)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-              >
-                <option value="alphabetical">A-Z</option>
-                <option value="value-high">Highest Value</option>
-                <option value="value-low">Lowest Value</option>
-              </select>
-            </div>
-          </div>
-
-          {view === 'all' && (
-            <div className="flex gap-3 flex-wrap">
-              <div className="flex-1 min-w-[200px] relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search payments..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <button
-                onClick={exportToCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-              >
-                <Download size={20} />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
-            </div>
-          )}
+        <div className="flex gap-2 mb-6 border-b border-gray-200">
+          <button
+            onClick={() => setView('upcoming')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              view === 'upcoming'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Upcoming Payments
+          </button>
+          <button
+            onClick={() => setView('all')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              view === 'all'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            All Subscriptions
+          </button>
         </div>
 
         <div className="mb-6">
-          {duplicateIds.size > 0 && view === 'all' && (
-            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                <strong>Potential duplicates detected!</strong> {duplicateIds.size} payment(s) highlighted in yellow may be duplicates. Please review and edit as needed.
-              </p>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-gray-600">Loading payments...</div>
-            </div>
-          ) : view === 'upcoming' ? (
-            <UpcomingPayments payments={sortedUpcomingPayments} />
+          {view === 'upcoming' ? (
+            <UpcomingPayments payments={upcomingPayments} />
           ) : (
             <SubscriptionList
-              subscriptions={sortedSubscriptions}
-              duplicateIds={duplicateIds}
+              subscriptions={subscriptions}
               onEdit={handleEdit}
               onDelete={handleDeleteSubscription}
               onToggleCancelled={handleToggleCancelled}
@@ -595,22 +225,13 @@ function App() {
         </div>
 
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg md:relative md:shadow-none md:border-0 md:bg-transparent md:p-0">
-          <div className="max-w-4xl mx-auto flex gap-3 flex-wrap">
+          <div className="max-w-4xl mx-auto flex gap-3">
             <button
               onClick={() => setShowUpload(true)}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium md:flex-none md:px-6"
             >
               <Upload size={20} />
-              <span className="hidden sm:inline">Upload Statement</span>
-              <span className="sm:hidden">Statement</span>
-            </button>
-            <button
-              onClick={() => setShowCSVImport(true)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium md:flex-none md:px-6"
-            >
-              <FileUp size={20} />
-              <span className="hidden sm:inline">Import CSV</span>
-              <span className="sm:hidden">CSV</span>
+              <span>Upload Statement</span>
             </button>
             <button
               onClick={() => {
@@ -621,96 +242,9 @@ function App() {
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium md:flex-none md:px-6"
             >
               <Plus size={20} />
-              <span className="hidden sm:inline">Add Payment</span>
-              <span className="sm:hidden">Add</span>
+              <span>Add Subscription</span>
             </button>
           </div>
-        </div>
-
-        <div className="mt-8 mb-20 md:mb-8">
-          <button
-            onClick={() => setShowFAQ(!showFAQ)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium"
-          >
-            <HelpCircle size={20} />
-            <span>{showFAQ ? 'Hide FAQ' : 'Show FAQ'}</span>
-          </button>
-
-          {showFAQ && (
-            <div className="mt-4 bg-white rounded-lg border border-gray-200 p-6 space-y-4">
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">What can I track with this app?</h3>
-                <p className="text-sm text-gray-700">
-                  Track all your recurring and one-off payments including streaming services, software licenses, memberships, purchases, and any other payments. View upcoming payments and manage your costs across different currencies.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">What currencies are supported?</h3>
-                <p className="text-sm text-gray-700">
-                  Currently supports HKD (Hong Kong Dollar), SGD (Singapore Dollar), and USD (US Dollar). You can set a primary display currency to see total costs converted. Exchange rates: 1 USD = 7.8 HKD = 1.35 SGD.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">How do I import payments via CSV?</h3>
-                <p className="text-sm text-gray-700 mb-2">
-                  Click the "Import CSV" button. Your CSV file must have these columns in this exact order:
-                </p>
-                <div className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto">
-                  Name,Amount,Currency,Frequency,Start Date,Next Payment
-                </div>
-                <p className="text-sm text-gray-700 mt-2">
-                  <strong>Example:</strong>
-                </p>
-                <div className="bg-gray-50 p-3 rounded text-xs font-mono overflow-x-auto">
-                  Netflix,119.00,HKD,Monthly,2026-01-01,2026-02-01
-                </div>
-                <ul className="text-sm text-gray-700 mt-2 space-y-1">
-                  <li><strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off (case-insensitive)</li>
-                  <li><strong>Currency:</strong> HKD, SGD, or USD</li>
-                  <li><strong>Dates:</strong> Format as YYYY-MM-DD</li>
-                  <li><strong>Note:</strong> The "Next Payment" column is required in the CSV but the app calculates payment dates automatically based on start date and frequency</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">How are payment dates calculated?</h3>
-                <p className="text-sm text-gray-700">
-                  The app automatically calculates your next payment date based on the subscription's start date and billing frequency. You don't need to manually update payment dates.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Can I upload bank statements?</h3>
-                <p className="text-sm text-gray-700">
-                  Yes, use the "Upload Statement" button to upload a screenshot or photo of your bank/credit card statement. The app stores the image with your subscription for reference.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Is my data secure?</h3>
-                <p className="text-sm text-gray-700">
-                  Yes, all data is stored securely in a database with row-level security. Only you can access your payment data. Your password is encrypted and never stored in plain text.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">What are the app's limitations?</h3>
-                <p className="text-sm text-gray-700">
-                  Currently, the app:
-                </p>
-                <ul className="text-sm text-gray-700 mt-1 list-disc list-inside space-y-1">
-                  <li>Supports 3 currencies only (HKD, SGD, USD)</li>
-                  <li>Uses fixed exchange rates for conversions</li>
-                  <li>Stores screenshots as base64 data (may impact performance with many large images)</li>
-                  <li>Does not send payment reminders or notifications</li>
-                  <li>Cannot automatically sync with your bank accounts</li>
-                  <li>One-off payments are not included in monthly total calculations</li>
-                </ul>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -737,20 +271,6 @@ function App() {
         <ScreenshotModal
           screenshot={viewingScreenshot}
           onClose={() => setViewingScreenshot(null)}
-        />
-      )}
-
-      {showCSVImport && (
-        <CSVImport
-          onImport={handleCSVImport}
-          onCancel={() => setShowCSVImport(false)}
-        />
-      )}
-
-      {showRecovery && (
-        <LocalStorageRecovery
-          onRecover={handleRecovery}
-          onCancel={() => setShowRecovery(false)}
         />
       )}
     </div>
