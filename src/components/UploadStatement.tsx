@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, FileText } from 'lucide-react';
 
 interface UploadStatementProps {
   onUpload: (screenshot: string) => void;
@@ -9,13 +9,17 @@ interface UploadStatementProps {
 export default function UploadStatement({ onUpload, onCancel }: UploadStatementProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [fileType, setFileType] = useState<'image' | 'pdf' | null>(null);
+  const [fileName, setFileName] = useState<string>('');
 
   const handleFileChange = (file: File) => {
-    if (file && file.type.startsWith('image/')) {
+    if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
         setPreview(result);
+        setFileType(file.type === 'application/pdf' ? 'pdf' : 'image');
+        setFileName(file.name);
       };
       reader.readAsDataURL(file);
     }
@@ -81,15 +85,15 @@ export default function UploadStatement({ onUpload, onCancel }: UploadStatementP
             >
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-lg font-medium text-gray-900 mb-2">
-                Upload bank statement screenshot
+                Upload bank statement
               </p>
               <p className="text-sm text-gray-500 mb-4">
-                Drag and drop your image here, or click to browse
+                Drag and drop your image or PDF here, or click to browse
               </p>
               <label className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer font-medium">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   onChange={handleInputChange}
                   className="hidden"
                 />
@@ -99,13 +103,25 @@ export default function UploadStatement({ onUpload, onCancel }: UploadStatementP
           ) : (
             <div className="space-y-4">
               <div className="relative">
-                <img
-                  src={preview}
-                  alt="Statement preview"
-                  className="w-full rounded-lg border border-gray-200"
-                />
+                {fileType === 'pdf' ? (
+                  <div className="flex flex-col items-center justify-center p-12 bg-gray-50 rounded-lg border-2 border-gray-200">
+                    <FileText className="h-24 w-24 text-gray-400 mb-4" />
+                    <p className="text-lg font-medium text-gray-900 mb-1">{fileName}</p>
+                    <p className="text-sm text-gray-500">PDF uploaded successfully</p>
+                  </div>
+                ) : (
+                  <img
+                    src={preview}
+                    alt="Statement preview"
+                    className="w-full rounded-lg border border-gray-200"
+                  />
+                )}
                 <button
-                  onClick={() => setPreview(null)}
+                  onClick={() => {
+                    setPreview(null);
+                    setFileType(null);
+                    setFileName('');
+                  }}
                   className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
                 >
                   <X size={20} />
@@ -114,11 +130,15 @@ export default function UploadStatement({ onUpload, onCancel }: UploadStatementP
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex gap-3">
-                  <ImageIcon className="text-blue-600 flex-shrink-0" size={20} />
+                  {fileType === 'pdf' ? (
+                    <FileText className="text-blue-600 flex-shrink-0" size={20} />
+                  ) : (
+                    <ImageIcon className="text-blue-600 flex-shrink-0" size={20} />
+                  )}
                   <div className="text-sm text-blue-900">
-                    <p className="font-medium mb-1">Screenshot uploaded</p>
+                    <p className="font-medium mb-1">{fileType === 'pdf' ? 'PDF' : 'Screenshot'} uploaded</p>
                     <p className="text-blue-700">
-                      This screenshot will be stored locally and attached to your subscription.
+                      This file will be stored locally and attached to your subscription.
                     </p>
                   </div>
                 </div>
