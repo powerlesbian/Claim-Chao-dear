@@ -38,12 +38,18 @@ export async function extractTextFromPDF(dataUrl: string): Promise<string> {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
       const pageText = textContent.items
-        .map((item: any) => item.str)
+        .map((item: any) => {
+          if (item.str) {
+            return item.str;
+          }
+          return '';
+        })
         .join(' ');
       fullText += pageText + '\n';
     }
 
     console.log(`Extracted ${fullText.length} characters from PDF`);
+    console.log('First 500 characters:', fullText.substring(0, 500));
     return fullText;
   } catch (error) {
     console.error('Detailed PDF parsing error:', error);
@@ -58,12 +64,17 @@ export function parseTransactionsFromText(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
 
-  const datePattern = /\b(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2})\b/;
-  const amountPattern = /[-]?\$?\s*\d+[,.]?\d*\.?\d{0,2}/g;
+  // More flexible date patterns - supports MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY, etc.
+  const datePattern = /\b(\d{1,2}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{2,4}|\d{4}[\s\/\-\.]\d{1,2}[\s\/\-\.]\d{1,2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4})\b/i;
+
+  // More flexible amount patterns - handles various currency formats
+  const amountPattern = /(?:[-+]?\s*)?(?:\$|USD|EUR|GBP|CAD)?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?|\d+\.\d{2}/g;
+
+  console.log(`Parsing ${lines.length} lines for transactions...`);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (!line) continue;
+    if (!line || line.length < 10) continue; // Skip very short lines
 
     const dateMatch = line.match(datePattern);
     if (!dateMatch) continue;
@@ -71,20 +82,26 @@ export function parseTransactionsFromText(text: string): Transaction[] {
     const amounts = line.match(amountPattern);
     if (!amounts || amounts.length === 0) continue;
 
+    // Try to find the most likely transaction amount (usually the last one)
     const lastAmount = amounts[amounts.length - 1]
-      .replace(/\$|,/g, '')
+      .replace(/\$|USD|EUR|GBP|CAD|,|\s/g, '')
       .trim();
     const amount = parseFloat(lastAmount);
 
-    if (isNaN(amount)) continue;
+    if (isNaN(amount) || amount === 0) continue;
 
     let description = line
       .replace(dateMatch[0], '')
-      .replace(lastAmount, '')
+      .replace(amounts[amounts.length - 1], '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (description.length > 0) {
+    // Clean up common statement artifacts
+    description = description
+      .replace(/^[-\s]+|[-\s]+$/g, '')
+      .replace(/\s{2,}/g, ' ');
+
+    if (description.length > 2) {
       transactions.push({
         date: dateMatch[0],
         description,
@@ -92,6 +109,11 @@ export function parseTransactionsFromText(text: string): Transaction[] {
         rawText: line,
       });
     }
+  }
+
+  console.log(`Found ${transactions.length} potential transactions`);
+  if (transactions.length > 0) {
+    console.log('Sample transaction:', transactions[0]);
   }
 
   return transactions;
