@@ -20,12 +20,14 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
     }
 
     const headers = lines[0].split(',').map(h => h.trim());
-    const expectedHeaders = ['Name', 'Amount', 'Currency', 'Frequency', 'Start Date', 'Next Payment'];
+    const requiredHeaders = ['Name', 'Amount', 'Currency', 'Frequency', 'Start Date'];
 
-    const headerCheck = expectedHeaders.every(h => headers.includes(h));
+    const headerCheck = requiredHeaders.every(h => headers.includes(h));
     if (!headerCheck) {
-      throw new Error(`CSV must have headers: ${expectedHeaders.join(', ')}`);
+      throw new Error(`CSV must have required headers: ${requiredHeaders.join(', ')}`);
     }
+
+    const categoryIndex = headers.indexOf('Category');
 
     const subscriptions: Omit<Subscription, 'id' | 'createdAt'>[] = [];
 
@@ -34,15 +36,21 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
       if (!line) continue;
 
       const values = line.split(',').map(v => v.trim());
-      if (values.length !== 6) {
-        throw new Error(`Row ${i} has incorrect number of columns`);
-      }
 
-      const name = values[0];
-      const amount = parseFloat(values[1]);
-      const currency = values[2] as 'HKD' | 'SGD' | 'USD';
-      const frequency = values[3].toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'yearly';
-      const startDate = values[4];
+      const nameIndex = headers.indexOf('Name');
+      const amountIndex = headers.indexOf('Amount');
+      const currencyIndex = headers.indexOf('Currency');
+      const frequencyIndex = headers.indexOf('Frequency');
+      const startDateIndex = headers.indexOf('Start Date');
+
+      const name = values[nameIndex];
+      const amount = parseFloat(values[amountIndex]);
+      const currency = values[currencyIndex] as 'HKD' | 'SGD' | 'USD';
+      const frequency = values[frequencyIndex].toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'yearly';
+      const startDate = values[startDateIndex];
+      const category = categoryIndex >= 0 && values[categoryIndex]
+        ? values[categoryIndex] as 'Entertainment' | 'Productivity' | 'Utilities' | 'Finance' | 'Health & Fitness' | 'Education' | 'Shopping' | 'Other'
+        : 'Other';
 
       if (!name || isNaN(amount)) {
         throw new Error(`Row ${i} has invalid data`);
@@ -62,6 +70,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
         currency,
         frequency,
         startDate,
+        category,
         cancelled: false,
       });
     }
@@ -137,12 +146,13 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
           <div className="mb-4">
             <h3 className="font-medium text-gray-900 mb-2">CSV Format</h3>
             <div className="bg-gray-50 p-3 rounded-lg text-xs font-mono overflow-x-auto">
-              <div>Name,Amount,Currency,Frequency,Start Date,Next Payment</div>
-              <div className="text-gray-600">Example: Netflix,119.00,HKD,Monthly,2026-01-01,2026-02-01</div>
+              <div>Name,Amount,Currency,Frequency,Start Date,Category</div>
+              <div className="text-gray-600">Example: Netflix,119.00,HKD,Monthly,2026-01-01,Entertainment</div>
             </div>
             <p className="text-sm text-gray-600 mt-2">
               <strong>Frequency:</strong> Daily, Weekly, Monthly, or Yearly<br />
-              <strong>Currency:</strong> HKD, SGD, or USD
+              <strong>Currency:</strong> HKD, SGD, or USD<br />
+              <strong>Category (optional):</strong> Entertainment, Productivity, Utilities, Finance, Health & Fitness, Education, Shopping, or Other
             </p>
           </div>
 

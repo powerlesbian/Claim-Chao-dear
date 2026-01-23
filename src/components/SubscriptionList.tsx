@@ -1,5 +1,6 @@
-import { Edit2, Trash2, CheckCircle, XCircle, Image } from 'lucide-react';
-import { Subscription } from '../types';
+import { useState } from 'react';
+import { Edit2, Trash2, CheckCircle, XCircle, Image, Filter } from 'lucide-react';
+import { Subscription, CategoryType } from '../types';
 import { formatCurrency, formatDate, calculateNextPaymentDate } from '../utils/dates';
 
 interface SubscriptionListProps {
@@ -19,6 +20,8 @@ export default function SubscriptionList({
   onToggleCancelled,
   onViewScreenshot
 }: SubscriptionListProps) {
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'All'>('All');
+
   if (subscriptions.length === 0) {
     return (
       <div className="text-center py-12">
@@ -28,11 +31,39 @@ export default function SubscriptionList({
     );
   }
 
-  const activeSubscriptions = subscriptions.filter(sub => !sub.cancelled);
-  const cancelledSubscriptions = subscriptions.filter(sub => sub.cancelled);
+  const filteredSubscriptions = selectedCategory === 'All'
+    ? subscriptions
+    : subscriptions.filter(sub => sub.category === selectedCategory);
+
+  const activeSubscriptions = filteredSubscriptions.filter(sub => !sub.cancelled);
+  const cancelledSubscriptions = filteredSubscriptions.filter(sub => sub.cancelled);
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+        <Filter size={20} className="text-gray-600" />
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value as CategoryType | 'All')}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        >
+          <option value="All">All Categories</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Productivity">Productivity</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Finance">Finance</option>
+          <option value="Health & Fitness">Health & Fitness</option>
+          <option value="Education">Education</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Other">Other</option>
+        </select>
+        {selectedCategory !== 'All' && (
+          <span className="text-sm text-gray-600">
+            {filteredSubscriptions.length} {filteredSubscriptions.length === 1 ? 'subscription' : 'subscriptions'}
+          </span>
+        )}
+      </div>
+
       {activeSubscriptions.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Active Subscriptions</h3>
@@ -105,6 +136,9 @@ function SubscriptionCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <h4 className="text-lg font-semibold text-gray-900">{subscription.name}</h4>
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+              {subscription.category}
+            </span>
             {isDuplicate && (
               <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs rounded-full font-medium">
                 Possible Duplicate

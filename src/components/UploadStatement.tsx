@@ -126,6 +126,7 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
           amount: detected.amount,
           currency: 'USD',
           frequency: detected.frequency,
+          category: detected.category,
           startDate: today,
           notes: `Auto-detected from ${fileName} (${Math.round(detected.confidence * 100)}% confidence)`,
           cancelled: false,
@@ -257,7 +258,12 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900">{sub.name}</p>
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-gray-900">{sub.name}</p>
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                              {sub.category}
+                            </span>
+                          </div>
                           <p className="text-sm text-gray-600">
                             ${sub.amount.toFixed(2)} / {sub.frequency}
                           </p>
