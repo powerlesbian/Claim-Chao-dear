@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download, Shield } from 'lucide-react';
+import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download, Shield, Database } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption } from './types';
 import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments, formatCurrency, calculateNextPaymentDate } from './utils/dates';
@@ -34,10 +34,12 @@ function App() {
   const [sortOption, setSortOptionState] = useState<SortOption>(getSortPreference());
   const [showFAQ, setShowFAQ] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hasLocalData, setHasLocalData] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadData();
+      setHasLocalData(checkLocalStorageData());
     }
   }, [user]);
 
@@ -321,6 +323,7 @@ function App() {
     if (newSubscriptions.length > 0) {
       setSubscriptions([...newSubscriptions, ...subscriptions]);
       setShowRecovery(false);
+      setHasLocalData(false);
     }
   };
 
@@ -473,6 +476,30 @@ function App() {
             </div>
           </div>
         </div>
+
+        {hasLocalData && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <Database className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+                <div className="flex-1">
+                  <p className="text-sm text-blue-900 font-medium mb-1">
+                    Local data detected!
+                  </p>
+                  <p className="text-sm text-blue-800">
+                    You have subscription data stored in your browser from before the Supabase migration. Click "Recover Data" to import it.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRecovery(true)}
+                className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+              >
+                Recover Data
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
