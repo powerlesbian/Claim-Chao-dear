@@ -91,8 +91,11 @@ export default function Auth() {
                   <p className="text-sm text-blue-900 font-medium mb-1">
                     Local data detected!
                   </p>
-                  <p className="text-sm text-blue-800">
-                    Your subscriptions are saved in browser storage. {isSignUp ? 'Create an account' : 'Sign in'} to automatically import them into your secure database.
+                  <p className="text-sm text-blue-800 mb-2">
+                    Your subscriptions are saved in browser storage. Sign in with Google below to automatically import them into your secure database.
+                  </p>
+                  <p className="text-xs text-blue-700 font-medium">
+                    Recommended: Use Google Sign-In for fastest access
                   </p>
                 </div>
               </div>
@@ -102,8 +105,37 @@ export default function Auth() {
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-              <p className="text-sm text-red-800">{error}</p>
+              <div className="flex-1">
+                <p className="text-sm text-red-800">{error}</p>
+                {error.includes('rate_limit') && (
+                  <p className="text-xs text-red-700 mt-2">
+                    Use Google Sign-In below instead - it works instantly without rate limits.
+                  </p>
+                )}
+              </div>
             </div>
+          )}
+
+          {hasLocalData && (
+            <>
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+              >
+                <Chrome size={20} />
+                <span>Continue with Google</span>
+              </button>
+
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">Or use email</span>
+                </div>
+              </div>
+            </>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4 mb-6">
@@ -188,23 +220,27 @@ export default function Auth() {
             </button>
           </form>
 
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
+          {!hasLocalData && (
+            <>
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">Or continue with</span>
+                </div>
+              </div>
 
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Chrome size={20} />
-            <span>Google</span>
-          </button>
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Chrome size={20} />
+                <span>Google</span>
+              </button>
+            </>
+          )}
 
           <div className="mt-6 text-center">
             <button
