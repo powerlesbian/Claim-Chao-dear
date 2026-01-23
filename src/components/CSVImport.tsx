@@ -13,13 +13,46 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
   const [preview, setPreview] = useState<Omit<Subscription, 'id' | 'createdAt'>[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
+  const parseCSVLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        insideQuotes = !insideQuotes;
+      } else if (char === ',' && !insideQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  };
+
+  const normalizeFrequency = (freq: string): 'daily' | 'weekly' | 'monthly' | 'yearly' => {
+    const normalized = freq.toLowerCase().trim();
+    if (normalized === 'one-off' || normalized === 'oneoff' || normalized === 'once') {
+      return 'yearly';
+    }
+    if (normalized.includes('day')) return 'daily';
+    if (normalized.includes('week')) return 'weekly';
+    if (normalized.includes('month')) return 'monthly';
+    if (normalized.includes('year')) return 'yearly';
+    return 'monthly';
+  };
+
   const parseCSV = (text: string): Omit<Subscription, 'id' | 'createdAt'>[] => {
-    const lines = text.trim().split('\n');
+    const lines = text.trim().split('\n').filter(line => line.trim());
     if (lines.length < 2) {
       throw new Error('CSV file must contain headers and at least one row');
     }
 
-    const headers = lines[0].split(',').map(h => h.trim());
+    const headers = parseCSVLine(lines[0]);
     const requiredHeaders = ['Name', 'Amount', 'Currency', 'Frequency', 'Start Date'];
 
     const headerCheck = requiredHeaders.every(h => headers.includes(h));
@@ -27,6 +60,11 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
       throw new Error(`CSV must have required headers: ${requiredHeaders.join(', ')}`);
     }
 
+    const nameIndex = headers.indexOf('Name');
+    const amountIndex = headers.indexOf('Amount');
+    const currencyIndex = headers.indexOf('Currency');
+    const frequencyIndex = headers.indexOf('Frequency');
+    const startDateIndex = headers.indexOf('Start Date');
     const categoryIndex = headers.indexOf('Category');
 
     const subscriptions: Omit<Subscription, 'id' | 'createdAt'>[] = [];
@@ -35,33 +73,27 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      const values = line.split(',').map(v => v.trim());
+      const values = parseCSVLine(line);
 
-      const nameIndex = headers.indexOf('Name');
-      const amountIndex = headers.indexOf('Amount');
-      const currencyIndex = headers.indexOf('Currency');
-      const frequencyIndex = headers.indexOf('Frequency');
-      const startDateIndex = headers.indexOf('Start Date');
+      if (values.join(',') === headers.join(',')) {
+        continue;
+      }
 
       const name = values[nameIndex];
       const amount = parseFloat(values[amountIndex]);
       const currency = values[currencyIndex] as 'HKD' | 'SGD' | 'USD';
-      const frequency = values[frequencyIndex].toLowerCase() as 'daily' | 'weekly' | 'monthly' | 'yearly';
+      const frequency = normalizeFrequency(values[frequencyIndex]);
       const startDate = values[startDateIndex];
       const category = categoryIndex >= 0 && values[categoryIndex]
         ? values[categoryIndex]
         : 'Other';
 
       if (!name || isNaN(amount)) {
-        throw new Error(`Row ${i} has invalid data`);
+        continue;
       }
 
       if (!['HKD', 'SGD', 'USD'].includes(currency)) {
-        throw new Error(`Row ${i} has invalid currency: ${currency}`);
-      }
-
-      if (!['daily', 'weekly', 'monthly', 'yearly'].includes(frequency)) {
-        throw new Error(`Row ${i} has invalid frequency: ${frequency}`);
+        continue;
       }
 
       subscriptions.push({
@@ -73,6 +105,10 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
         category,
         cancelled: false,
       });
+    }
+
+    if (subscriptions.length === 0) {
+      throw new Error('No valid subscriptions found in CSV');
     }
 
     return subscriptions;
@@ -150,7 +186,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
               <div className="text-gray-600">Example: Netflix,119.00,HKD,Monthly,2026-01-01,Entertainment</div>
             </div>
             <p className="text-sm text-gray-600 mt-2">
-              <strong>Frequency:</strong> Daily, Weekly, Monthly, or Yearly<br />
+              <strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off<br />
               <strong>Currency:</strong> HKD, SGD, or USD<br />
               <strong>Category (optional):</strong> Any category from your list (defaults to "Other")
             </p>
