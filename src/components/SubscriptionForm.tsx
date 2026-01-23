@@ -12,7 +12,12 @@ export default function SubscriptionForm({ onSubmit, onCancel, initialData }: Su
   const [name, setName] = useState(initialData?.name || '');
   const [amount, setAmount] = useState(initialData?.amount.toString() || '');
   const [currency, setCurrency] = useState<CurrencyType>(initialData?.currency || 'HKD');
-  const [startDate, setStartDate] = useState(initialData?.startDate || new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => {
+    if (initialData?.startDate) {
+      return initialData.startDate.split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
   const [frequency, setFrequency] = useState<FrequencyType>(initialData?.frequency || 'monthly');
   const [notes, setNotes] = useState(initialData?.notes || '');
 
@@ -127,6 +132,7 @@ export default function SubscriptionForm({ onSubmit, onCancel, initialData }: Su
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
+              <option value="one-off">One-off</option>
             </select>
           </div>
 

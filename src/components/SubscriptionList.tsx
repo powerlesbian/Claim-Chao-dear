@@ -4,6 +4,7 @@ import { formatCurrency, formatDate, calculateNextPaymentDate } from '../utils/d
 
 interface SubscriptionListProps {
   subscriptions: Subscription[];
+  duplicateIds?: Set<string>;
   onEdit: (subscription: Subscription) => void;
   onDelete: (id: string) => void;
   onToggleCancelled: (id: string, cancelled: boolean) => void;
@@ -12,6 +13,7 @@ interface SubscriptionListProps {
 
 export default function SubscriptionList({
   subscriptions,
+  duplicateIds = new Set(),
   onEdit,
   onDelete,
   onToggleCancelled,
@@ -39,6 +41,7 @@ export default function SubscriptionList({
               <SubscriptionCard
                 key={subscription.id}
                 subscription={subscription}
+                isDuplicate={duplicateIds.has(subscription.id)}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleCancelled={onToggleCancelled}
@@ -57,6 +60,7 @@ export default function SubscriptionList({
               <SubscriptionCard
                 key={subscription.id}
                 subscription={subscription}
+                isDuplicate={duplicateIds.has(subscription.id)}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleCancelled={onToggleCancelled}
@@ -72,12 +76,14 @@ export default function SubscriptionList({
 
 function SubscriptionCard({
   subscription,
+  isDuplicate = false,
   onEdit,
   onDelete,
   onToggleCancelled,
   onViewScreenshot
 }: {
   subscription: Subscription;
+  isDuplicate?: boolean;
   onEdit: (subscription: Subscription) => void;
   onDelete: (id: string) => void;
   onToggleCancelled: (id: string, cancelled: boolean) => void;
@@ -88,11 +94,22 @@ function SubscriptionCard({
     : null;
 
   return (
-    <div className={`bg-white rounded-lg border ${subscription.cancelled ? 'border-gray-200 opacity-75' : 'border-gray-200'} p-4 shadow-sm hover:shadow-md transition-shadow`}>
+    <div className={`rounded-lg border p-4 shadow-sm hover:shadow-md transition-shadow ${
+      isDuplicate
+        ? 'bg-yellow-50 border-yellow-300'
+        : subscription.cancelled
+        ? 'bg-white border-gray-200 opacity-75'
+        : 'bg-white border-gray-200'
+    }`}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <h4 className="text-lg font-semibold text-gray-900">{subscription.name}</h4>
+            {isDuplicate && (
+              <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs rounded-full font-medium">
+                Possible Duplicate
+              </span>
+            )}
             {subscription.cancelled && (
               <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">
                 Cancelled

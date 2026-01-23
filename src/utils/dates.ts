@@ -5,6 +5,10 @@ export const calculateNextPaymentDate = (startDate: string, frequency: Frequency
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  if (frequency === 'one-off') {
+    return start;
+  }
+
   let next = new Date(start);
 
   while (next < today) {
@@ -37,7 +41,7 @@ export const getDaysUntil = (date: Date): number => {
 };
 
 export const getUpcomingPayments = (subscriptions: Subscription[]): UpcomingPayment[] => {
-  const activeSubscriptions = subscriptions.filter(sub => !sub.cancelled);
+  const activeSubscriptions = subscriptions.filter(sub => !sub.cancelled && sub.frequency !== 'one-off');
 
   return activeSubscriptions
     .map(subscription => {
@@ -59,14 +63,16 @@ export const formatDate = (date: string | Date): string => {
 };
 
 export const formatCurrency = (amount: number, currency: 'HKD' | 'SGD' | 'USD' = 'HKD'): string => {
-  const localeMap = {
-    HKD: 'en-HK',
-    SGD: 'en-SG',
-    USD: 'en-US'
+  const currencySymbols = {
+    HKD: 'HK$',
+    SGD: 'S$',
+    USD: 'US$'
   };
 
-  return new Intl.NumberFormat(localeMap[currency], {
-    style: 'currency',
-    currency
-  }).format(amount);
+  const formatted = amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+
+  return `${currencySymbols[currency]}${formatted}`;
 };

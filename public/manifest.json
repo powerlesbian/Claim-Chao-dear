@@ -1,7 +1,7 @@
 {
-  "name": "Subscription Tracker",
-  "short_name": "SubTracker",
-  "description": "Track and manage your subscriptions",
+  "name": "Claim Chao-dear",
+  "short_name": "Chao-dear",
+  "description": "Track your subscriptions and claims to fix leaks from the taps",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
