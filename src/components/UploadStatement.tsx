@@ -43,7 +43,10 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
     setError(null);
     try {
       const text = await extractTextFromPDF(dataUrl);
+      console.log('Extracted text length:', text.length);
+
       const transactions = parseTransactionsFromText(text);
+      console.log('Parsed transactions:', transactions.length);
 
       if (transactions.length === 0) {
         setError('No transactions found in the PDF. The file may be an image-based PDF or have an unsupported format.');
@@ -52,16 +55,18 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
       }
 
       const detected = detectSubscriptions(transactions);
+      console.log('Detected subscriptions:', detected.length);
 
       if (detected.length === 0) {
-        setError('No recurring subscriptions detected. You can still attach this file to a subscription manually.');
+        setError(`Found ${transactions.length} transactions but no recurring subscriptions detected. You can still attach this file to a subscription manually.`);
       } else {
         setDetectedSubscriptions(detected);
         setSelectedIds(new Set(detected.map((_, i) => i)));
       }
     } catch (err) {
       console.error('Error parsing PDF:', err);
-      setError('Failed to parse PDF. You can still attach this file to a subscription manually.');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Failed to parse PDF: ${errorMessage}. You can still attach this file to a subscription manually.`);
     }
     setParsing(false);
   };

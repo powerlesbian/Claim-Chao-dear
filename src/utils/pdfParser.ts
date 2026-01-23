@@ -1,6 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export interface Transaction {
   date: string;
@@ -11,14 +11,26 @@ export interface Transaction {
 
 export async function extractTextFromPDF(dataUrl: string): Promise<string> {
   try {
+    if (!dataUrl || !dataUrl.includes('base64')) {
+      throw new Error('Invalid data URL format');
+    }
+
     const base64 = dataUrl.split(',')[1];
+    if (!base64) {
+      throw new Error('No base64 data found');
+    }
+
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    console.log('Loading PDF document...');
+    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+    const pdf = await loadingTask.promise;
+    console.log(`PDF loaded successfully. Pages: ${pdf.numPages}`);
+
     let fullText = '';
 
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -30,10 +42,14 @@ export async function extractTextFromPDF(dataUrl: string): Promise<string> {
       fullText += pageText + '\n';
     }
 
+    console.log(`Extracted ${fullText.length} characters from PDF`);
     return fullText;
   } catch (error) {
-    console.error('Error parsing PDF:', error);
-    throw new Error('Failed to parse PDF');
+    console.error('Detailed PDF parsing error:', error);
+    if (error instanceof Error) {
+      throw new Error(`PDF parsing failed: ${error.message}`);
+    }
+    throw new Error('Failed to parse PDF - unknown error');
   }
 }
 
