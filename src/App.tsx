@@ -4,6 +4,7 @@ import { Subscription, CurrencyType, SortOption } from './types';
 import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments, formatCurrency, calculateNextPaymentDate } from './utils/dates';
 import { convertCurrency, getDisplayCurrency, setDisplayCurrency } from './utils/currency';
+import { checkLocalStorageData } from './utils/localStorageRecovery';
 import { useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
 import SubscriptionForm from './components/SubscriptionForm';
@@ -12,6 +13,7 @@ import UploadStatement from './components/UploadStatement';
 import UpcomingPayments from './components/UpcomingPayments';
 import ScreenshotModal from './components/ScreenshotModal';
 import CSVImport from './components/CSVImport';
+import LocalStorageRecovery from './components/LocalStorageRecovery';
 import { AdminPanel } from './components/AdminPanel';
 
 type View = 'upcoming' | 'all' | 'admin';
@@ -24,6 +26,7 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showCSVImport, setShowCSVImport] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
@@ -43,6 +46,11 @@ function App() {
     const loaded = await loadSubscriptions();
     setSubscriptions(loaded);
     setLoading(false);
+
+    // Auto-detect if we should show recovery modal
+    if (loaded.length === 0 && checkLocalStorageData()) {
+      setShowRecovery(true);
+    }
   };
 
   const handleCurrencyChange = (currency: CurrencyType) => {
@@ -304,6 +312,15 @@ function App() {
     if (newSubscriptions.length > 0) {
       setSubscriptions([...newSubscriptions, ...subscriptions]);
       setShowCSVImport(false);
+    }
+  };
+
+  const handleRecovery = async (recoveredSubscriptions: Omit<Subscription, 'id' | 'createdAt'>[]) => {
+    const newSubscriptions = await addSubscriptions(recoveredSubscriptions);
+
+    if (newSubscriptions.length > 0) {
+      setSubscriptions([...newSubscriptions, ...subscriptions]);
+      setShowRecovery(false);
     }
   };
 
@@ -700,6 +717,13 @@ function App() {
         <CSVImport
           onImport={handleCSVImport}
           onCancel={() => setShowCSVImport(false)}
+        />
+      )}
+
+      {showRecovery && (
+        <LocalStorageRecovery
+          onRecover={handleRecovery}
+          onCancel={() => setShowRecovery(false)}
         />
       )}
     </div>
