@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download } from 'lucide-react';
+import { Plus, Upload, DollarSign, Calendar, List, ArrowUpDown, LogOut, FileUp, HelpCircle, Search, Download, Shield } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption } from './types';
 import { loadSubscriptions, addSubscription, addSubscriptions, updateSubscription, deleteSubscription, getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments, formatCurrency, calculateNextPaymentDate } from './utils/dates';
@@ -12,11 +12,12 @@ import UploadStatement from './components/UploadStatement';
 import UpcomingPayments from './components/UpcomingPayments';
 import ScreenshotModal from './components/ScreenshotModal';
 import CSVImport from './components/CSVImport';
+import { AdminPanel } from './components/AdminPanel';
 
-type View = 'upcoming' | 'all';
+type View = 'upcoming' | 'all' | 'admin';
 
 function App() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, isAdmin, loading: authLoading, signOut } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('upcoming');
@@ -345,6 +346,30 @@ function App() {
     return <Auth />;
   }
 
+  if (view === 'admin' && isAdmin) {
+    return (
+      <div>
+        <div className="bg-white border-b border-gray-200 px-4 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <button
+              onClick={() => setView('upcoming')}
+              className="text-sm text-gray-600 hover:text-gray-900"
+            >
+              ← Back to App
+            </button>
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+        <AdminPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       <div className="max-w-4xl mx-auto px-4 py-6 pb-24 md:py-8">
@@ -370,6 +395,15 @@ function App() {
                   <option value="USD">USD</option>
                 </select>
               </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setView('admin')}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  title="Admin Panel"
+                >
+                  <Shield size={18} />
+                </button>
+              )}
               <button
                 onClick={() => signOut()}
                 className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
