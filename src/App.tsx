@@ -78,7 +78,11 @@ function App() {
         monthlyAmount = subscription.amount / 12;
         break;
       case 'one-off':
-        monthlyAmount = 0;
+        const startDate = new Date(subscription.startDate);
+        const today = new Date();
+        const isSameMonth = startDate.getMonth() === today.getMonth() &&
+                           startDate.getFullYear() === today.getFullYear();
+        monthlyAmount = isSameMonth ? subscription.amount : 0;
         break;
     }
     return convertCurrency(monthlyAmount, subscription.currency, displayCurrency);
@@ -346,7 +350,11 @@ function App() {
         monthlyAmount = sub.amount / 12;
         break;
       case 'one-off':
-        monthlyAmount = 0;
+        const startDate = new Date(sub.startDate);
+        const today = new Date();
+        const isSameMonth = startDate.getMonth() === today.getMonth() &&
+                           startDate.getFullYear() === today.getFullYear();
+        monthlyAmount = isSameMonth ? sub.amount : 0;
         break;
     }
 
@@ -706,7 +714,7 @@ function App() {
                   <li>Stores screenshots as base64 data (may impact performance with many large images)</li>
                   <li>Does not send payment reminders or notifications</li>
                   <li>Cannot automatically sync with your bank accounts</li>
-                  <li>One-off payments are not included in monthly total calculations</li>
+                  <li>One-off payments are included in monthly totals only for the month they occurred</li>
                 </ul>
               </div>
             </div>

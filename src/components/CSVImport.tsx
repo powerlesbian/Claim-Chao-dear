@@ -34,10 +34,10 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
     return values;
   };
 
-  const normalizeFrequency = (freq: string): 'daily' | 'weekly' | 'monthly' | 'yearly' => {
+  const normalizeFrequency = (freq: string): 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one-off' => {
     const normalized = freq.toLowerCase().trim();
     if (normalized === 'one-off' || normalized === 'oneoff' || normalized === 'once') {
-      return 'yearly';
+      return 'one-off';
     }
     if (normalized.includes('day')) return 'daily';
     if (normalized.includes('week')) return 'weekly';
