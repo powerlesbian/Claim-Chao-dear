@@ -71,17 +71,22 @@ export default function Auth() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-          <div className="text-center mb-8">
-            <div className="mb-3">
-              <h1 className="text-3xl font-bold text-gray-900 mb-1">
-                Payments Tracker
-              </h1>
-              <p className="text-sm text-blue-600 font-medium">by Claim Chowder</p>
-            </div>
-            <p className="text-gray-600">
-              {isSignUp ? 'Create your account' : 'Sign in to your account'}
-            </p>
+         <div className="text-center mb-8">
+          <div className="mb-4">
+            <img 
+              src="/logo.png" 
+              alt="Claim Chowder" 
+              className="w-20 h-20 mx-auto mb-3"
+            />
+            <h1 className="text-3xl font-bold text-gray-900 mb-1">
+              Payments Tracker
+            </h1>
+            <p className="text-sm text-blue-600 font-medium">by Claim Chowder</p>
           </div>
+          <p className="text-gray-600">
+            {isSignUp ? 'Create your account' : 'Sign in to your account'}
+          </p>
+        </div>
 
           {hasLocalData && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">

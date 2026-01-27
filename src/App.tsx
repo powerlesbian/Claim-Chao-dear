@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, ArrowUpDown, Settings } from 'lucide-react';
+import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, ArrowUpDown, Settings, Users } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption, DEFAULT_TAGS } from './types';
 import { getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments } from './utils/dates';
@@ -26,6 +26,9 @@ import TagFilter from './components/TagFilter';
 import FAQ from './components/FAQ';
 import SettingsModal from './components/SettingsModal';
 import { supabase } from './lib/supabase';
+import { useTeam } from './contexts/TeamContext';
+import TeamSettings from './components/TeamSettings';
+
 
 type View = 'upcoming' | 'all' | 'admin';
 
@@ -43,6 +46,7 @@ function App() {
     reload,
     setHasLocalData,
   } = useSubscriptions(user?.id);
+  const { currentTeam, teams } = useTeam();
 
   // UI State
   const [view, setView] = useState<View>('upcoming');
@@ -59,6 +63,8 @@ function App() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customTags, setCustomTags] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+//team settings modal
+const [showTeamSettings, setShowTeamSettings] = useState(false);
 
   // Preferences
   const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
@@ -282,6 +288,14 @@ const handleTagRename = async (oldTag: string, newTag: string) => {
               >
                 <LogOut size={18} />
               </button>
+              <button
+                onClick={() => setShowTeamSettings(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Team Settings"
+              >
+                <Users size={18} />
+                <span className="hidden sm:inline text-sm">{currentTeam?.name || 'Personal'}</span>
+              </button>
             </div>
           </div>
         </header>
@@ -389,7 +403,9 @@ const handleTagRename = async (oldTag: string, newTag: string) => {
           availableTags={availableTags}
         />
       )}
-
+      {showTeamSettings && (
+        <TeamSettings onClose={() => setShowTeamSettings(false)} />
+      )}
       {showUpload && (
         <UploadStatement
           onUpload={handleUploadComplete}
