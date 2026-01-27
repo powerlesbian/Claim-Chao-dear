@@ -45,9 +45,9 @@ const calculateSimilarity = (str1: string, str2: string): number => {
   const editDistance = getEditDistance(longer, shorter);
   return (longer.length - editDistance) / longer.length;
 };
-
 /**
- * Detect potential duplicate subscriptions based on name, price, and payment date
+ * Detect exact duplicate subscriptions
+ * Duplicates = same name (case-insensitive, trimmed) AND same amount
  */
 export const detectDuplicates = (
   subscriptions: Subscription[],
@@ -60,43 +60,22 @@ export const detectDuplicates = (
       const sub1 = subscriptions[i];
       const sub2 = subscriptions[j];
 
-      // Check price match
-      const monthlyValue1 = getMonthlyValue(sub1, displayCurrency);
-      const monthlyValue2 = getMonthlyValue(sub2, displayCurrency);
-      const priceDiff = Math.abs(monthlyValue1 - monthlyValue2);
-      const priceMatch = priceDiff < 0.01;
+      // Exact name match (case-insensitive, trimmed)
+      const name1 = sub1.name.toLowerCase().trim();
+      const name2 = sub2.name.toLowerCase().trim();
+      
+      if (name1 !== name2) continue;
 
-      if (!priceMatch) continue;
+      // Exact amount match (converted to same currency)
+      const amount1 = getMonthlyValue(sub1, displayCurrency);
+      const amount2 = getMonthlyValue(sub2, displayCurrency);
+      
+      // Allow tiny floating point difference (< 1 cent)
+      if (Math.abs(amount1 - amount2) > 0.01) continue;
 
-      // Check date match
-      const nextPayment1 = !sub1.cancelled
-        ? calculateNextPaymentDate(sub1.startDate, sub1.frequency)
-        : null;
-      const nextPayment2 = !sub2.cancelled
-        ? calculateNextPaymentDate(sub2.startDate, sub2.frequency)
-        : null;
-
-      let dateMatch = false;
-      if (nextPayment1 && nextPayment2) {
-        const date1 = nextPayment1.toISOString().split('T')[0];
-        const date2 = nextPayment2.toISOString().split('T')[0];
-        dateMatch = date1 === date2;
-      } else if (!nextPayment1 && !nextPayment2) {
-        dateMatch = true;
-      }
-
-      if (!dateMatch) continue;
-
-      // Check name similarity
-      const normalizedName1 = sub1.name.toLowerCase().trim();
-      const normalizedName2 = sub2.name.toLowerCase().trim();
-      const nameSimilarity = calculateSimilarity(normalizedName1, normalizedName2);
-      const nameMatch = nameSimilarity > 0.9;
-
-      if (nameMatch) {
-        duplicateIds.add(sub1.id);
-        duplicateIds.add(sub2.id);
-      }
+      // Both conditions met = duplicate
+      duplicateIds.add(sub1.id);
+      duplicateIds.add(sub2.id);
     }
   }
 
