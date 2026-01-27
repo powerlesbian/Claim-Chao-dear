@@ -3,6 +3,9 @@ export type CurrencyType = 'HKD' | 'SGD' | 'USD';
 export type SortOption = 'alphabetical' | 'value-high' | 'value-low';
 export type UserRole = 'admin' | 'user';
 
+// Predefined tags
+export const DEFAULT_TAGS = ['Personal', 'Business'] as const;
+
 export interface Category {
   id: string;
   name: string;
@@ -25,6 +28,7 @@ export interface Subscription {
   startDate: string;
   frequency: FrequencyType;
   category: string;
+  tags: string[];  // NEW
   cancelled: boolean;
   cancelledDate?: string;
   notes?: string;

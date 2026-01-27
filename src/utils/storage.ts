@@ -1,4 +1,4 @@
-import { Subscription, SortOption } from '../types';
+import { Subscription, SortOption, CurrencyType, FrequencyType } from '../types';
 import { supabase } from '../lib/supabase';
 
 const SORT_KEY = 'subscription-tracker-sort';
@@ -15,17 +15,21 @@ interface DbSubscription {
   cancelled_date: string | null;
   notes: string | null;
   screenshot: string | null;
+  tags: string[] | null;
   created_at: string;
   updated_at: string;
 }
 
 const mapDbToSubscription = (db: DbSubscription): Subscription => ({
   id: db.id,
+  user_id: db.user_id,
   name: db.name,
   amount: db.amount,
-  currency: db.currency as any,
+  currency: db.currency as CurrencyType,
   startDate: db.start_date,
-  frequency: db.frequency as any,
+  frequency: db.frequency as FrequencyType,
+  category: '', // You may need to handle this
+  tags: db.tags || ['Personal'],  // NEW
   cancelled: db.cancelled,
   cancelledDate: db.cancelled_date || undefined,
   notes: db.notes || undefined,
@@ -43,6 +47,7 @@ const mapSubscriptionToDb = (sub: Omit<Subscription, 'id' | 'createdAt'> & { id?
   cancelled_date: sub.cancelledDate || null,
   notes: sub.notes || null,
   screenshot: sub.screenshot || null,
+  tags: sub.tags || ['Personal'],  // NEW
 });
 
 export const loadSubscriptions = async (): Promise<Subscription[]> => {

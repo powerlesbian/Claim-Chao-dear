@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, ArrowUpDown } from 'lucide-react';
-import { Subscription, CurrencyType, SortOption } from './types';
+import { useState, useMemo } from 'react';
+import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, ArrowUpDown, Settings } from 'lucide-react';
+import { Subscription, CurrencyType, SortOption, DEFAULT_TAGS } from './types';
 import { getSortPreference, setSortPreference } from './utils/storage';
 import { getUpcomingPayments } from './utils/dates';
 import { getDisplayCurrency, setDisplayCurrency } from './utils/currency';
@@ -21,7 +21,11 @@ import CSVImport from './components/CSVImport';
 import LocalStorageRecovery from './components/LocalStorageRecovery';
 import { AdminPanel } from './components/AdminPanel';
 import StatsCards from './components/StatsCards';
+import DashboardCards from './components/DashboardCards';
+import TagFilter from './components/TagFilter';
 import FAQ from './components/FAQ';
+import SettingsModal from './components/SettingsModal';
+import { supabase } from './lib/supabase';
 
 type View = 'upcoming' | 'all' | 'admin';
 
@@ -36,6 +40,7 @@ function App() {
     update,
     remove,
     toggleCancelled,
+    reload,
     setHasLocalData,
   } = useSubscriptions(user?.id);
 
@@ -49,19 +54,83 @@ function App() {
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
-  // Add state near other useState calls
   const [toast, setToast] = useState<string | null>(null);
+// Tag filtering state
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Preferences
   const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
   const [sortOption, setSortOptionState] = useState<SortOption>(getSortPreference());
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Collect all available tags from subscriptions + defaults + custom
+  const availableTags = useMemo(() => {
+    const tagsSet = new Set<string>(DEFAULT_TAGS);
+    subscriptions.forEach((sub) => {
+      sub.tags?.forEach((tag) => tagsSet.add(tag));
+    });
+    customTags.forEach((tag) => tagsSet.add(tag));
+    return Array.from(tagsSet).sort();
+  }, [subscriptions, customTags]);
+
   // Handlers
   const handleCurrencyChange = (currency: CurrencyType) => {
     setDisplayCurrencyState(currency);
     setDisplayCurrency(currency);
   };
+  const handleAddTag = (tag: string) => {
+    if (!customTags.includes(tag)) {
+      setCustomTags([...customTags, tag]);
+    }
+  };
+const handleTagDelete = async (tag: string) => {
+  // Remove from custom tags
+  setCustomTags(customTags.filter(t => t !== tag));
+  
+  // Remove from selected tags
+  setSelectedTags(selectedTags.filter(t => t !== tag));
+  
+  // Find all subscriptions with this tag and update them
+  const subsWithTag = subscriptions.filter(s => s.tags?.includes(tag));
+  
+  for (const sub of subsWithTag) {
+    const newTags = sub.tags?.filter(t => t !== tag) || [];
+    // Ensure at least one tag remains
+    const finalTags = newTags.length > 0 ? newTags : ['Personal'];
+    
+    await supabase
+      .from('subscriptions')
+      .update({ tags: finalTags })
+      .eq('id', sub.id);
+  }
+  
+  // Refresh subscriptions without page reload
+  await reload();
+};
+
+const handleTagRename = async (oldTag: string, newTag: string) => {
+  // Update custom tags
+  setCustomTags(customTags.map(t => t === oldTag ? newTag : t));
+  
+  // Update selected tags
+  setSelectedTags(selectedTags.map(t => t === oldTag ? newTag : t));
+  
+  // Find all subscriptions with this tag and update them
+  const subsWithTag = subscriptions.filter(s => s.tags?.includes(oldTag));
+  
+  for (const sub of subsWithTag) {
+    const newTags = sub.tags?.map(t => t === oldTag ? newTag : t) || [newTag];
+    
+    await supabase
+      .from('subscriptions')
+      .update({ tags: newTags })
+      .eq('id', sub.id);
+  }
+  // Refresh subscriptions without page reload
+  await reload();
+};
 
   const handleSortChange = (sort: SortOption) => {
     setSortOptionState(sort);
@@ -106,13 +175,13 @@ function App() {
     setShowForm(true);
   };
 
-const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[]) => {
-  const result = await addMany(imported);
-  if (result.length > 0) {
-    setShowCSVImport(false);
-    setToast(`Imported ${result.length} transaction${result.length > 1 ? 's' : ''}! View in "All Payments" tab.`);
-  }
-};
+  const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[]) => {
+    const result = await addMany(imported);
+    if (result.length > 0) {
+      setShowCSVImport(false);
+      setToast(`Imported ${result.length} transaction${result.length > 1 ? 's' : ''}! View in "All Payments" tab.`);
+    }
+  };
 
   const handleRecovery = async (recovered: Omit<Subscription, 'id' | 'createdAt'>[]) => {
     const result = await addMany(recovered);
@@ -122,13 +191,24 @@ const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[
     }
   };
 
-  // Computed values
-  const activeSubscriptions = subscriptions.filter((sub) => !sub.cancelled);
-  const filteredSubscriptions = filterSubscriptions(subscriptions, searchQuery);
+  // Filter subscriptions by selected tags
+  const tagFilteredSubscriptions = useMemo(() => {
+    if (selectedTags.length === 0) {
+      return subscriptions; // No filter = show all
+    }
+    return subscriptions.filter((sub) => {
+      const subTags = sub.tags || ['Personal'];
+      return subTags.some((tag) => selectedTags.includes(tag));
+    });
+  }, [subscriptions, selectedTags]);
+
+  // Computed values (now based on tag-filtered subscriptions)
+  const activeSubscriptions = tagFilteredSubscriptions.filter((sub) => !sub.cancelled);
+  const filteredSubscriptions = filterSubscriptions(tagFilteredSubscriptions, searchQuery);
   const sortedSubscriptions = sortSubscriptions(filteredSubscriptions, sortOption, displayCurrency);
   const upcomingPayments = getUpcomingPayments(sortedSubscriptions);
-  const duplicateIds = detectDuplicates(subscriptions, displayCurrency);
-  const totalMonthly = calculateTotalMonthly(subscriptions, displayCurrency);
+  const duplicateIds = detectDuplicates(tagFilteredSubscriptions, displayCurrency);
+  const totalMonthly = calculateTotalMonthly(tagFilteredSubscriptions, displayCurrency);
 
   // Loading states
   if (authLoading) {
@@ -189,6 +269,13 @@ const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[
                 </button>
               )}
               <button
+                onClick={() => setShowSettings(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Settings"
+              >
+                <Settings size={18} />
+              </button>
+              <button
                 onClick={() => signOut()}
                 className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Sign out"
@@ -199,11 +286,25 @@ const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[
           </div>
         </header>
 
+        {/* Tag Filter */}
+        <TagFilter
+          availableTags={availableTags}
+          selectedTags={selectedTags}
+          onTagsChange={setSelectedTags}
+          onAddTag={handleAddTag}
+        />
+
         {/* Stats */}
         <StatsCards
           totalMonthly={totalMonthly}
           activeCount={activeSubscriptions.length}
           dueThisWeek={upcomingPayments.filter((p) => p.daysUntil <= 7).length}
+          displayCurrency={displayCurrency}
+        />
+
+        {/* Dashboard Cards */}
+        <DashboardCards
+          subscriptions={tagFilteredSubscriptions}
           displayCurrency={displayCurrency}
         />
 
@@ -267,6 +368,15 @@ const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[
       </div>
 
       {/* Modals */}
+      {showSettings && (
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          availableTags={availableTags}
+          onTagDelete={handleTagDelete}
+          onTagRename={handleTagRename}
+          onTagAdd={handleAddTag}
+        />
+      )}
       {showForm && (
         <SubscriptionForm
           onSubmit={editingSubscription ? handleUpdateSubscription : handleAddSubscription}
@@ -276,6 +386,7 @@ const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[
             setUploadedScreenshot(null);
           }}
           initialData={editingSubscription || undefined}
+          availableTags={availableTags}
         />
       )}
 
@@ -296,10 +407,6 @@ const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[
 
       {showCSVImport && (
         <CSVImport onImport={handleCSVImport} onCancel={() => setShowCSVImport(false)} />
-      )}
-
-      {showRecovery && (
-        <LocalStorageRecovery onRecover={handleRecovery} onCancel={() => setShowRecovery(false)} />
       )}
 
       {showRecovery && (
