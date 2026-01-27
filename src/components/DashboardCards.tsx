@@ -2,6 +2,7 @@ import { TrendingUp, Repeat, CreditCard, Tag } from 'lucide-react';
 import { Subscription, CurrencyType } from '../types';
 import { formatCurrency } from '../utils/dates';
 import { getMonthlyValue } from '../utils/calculations';
+import { convertCurrency } from '../utils/currency';
 
 interface DashboardCardsProps {
   subscriptions: Subscription[];
@@ -11,42 +12,67 @@ interface DashboardCardsProps {
 export default function DashboardCards({ subscriptions, displayCurrency }: DashboardCardsProps) {
   const activeSubscriptions = subscriptions.filter(s => !s.cancelled);
   
-  // Calculate top category
+  // Helper to get value in display currency (handles one-off correctly)
+  const getValue = (sub: Subscription): number => {
+    const converted = convertCurrency(sub.amount, sub.currency, displayCurrency);
+    return converted;
+  };
+
+  // Calculate top category (include all transactions)
   const categoryTotals = new Map<string, number>();
   activeSubscriptions.forEach(sub => {
     const category = sub.category || 'Other';
     const current = categoryTotals.get(category) || 0;
-    categoryTotals.set(category, current + getMonthlyValue(sub, displayCurrency));
+    categoryTotals.set(category, current + getValue(sub));
   });
   
   const topCategory = Array.from(categoryTotals.entries())
     .sort((a, b) => b[1] - a[1])[0];
 
-  // Calculate biggest payee
+  // Calculate biggest payee (include all transactions)
   const payeeTotals = new Map<string, number>();
   activeSubscriptions.forEach(sub => {
     const current = payeeTotals.get(sub.name) || 0;
-    payeeTotals.set(sub.name, current + getMonthlyValue(sub, displayCurrency));
+    payeeTotals.set(sub.name, current + getValue(sub));
   });
   
   const topPayee = Array.from(payeeTotals.entries())
     .sort((a, b) => b[1] - a[1])[0];
 
-  // Recurring total (monthly/weekly/yearly/daily)
+  // Recurring total (monthly equivalent)
   const recurringTotal = activeSubscriptions
     .filter(s => s.frequency !== 'one-off')
     .reduce((sum, sub) => sum + getMonthlyValue(sub, displayCurrency), 0);
 
-  // One-off this month
+  // One-off this month (with currency conversion)
   const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
   const oneOffThisMonth = activeSubscriptions
     .filter(s => {
       if (s.frequency !== 'one-off') return false;
       const startDate = new Date(s.startDate);
-      return startDate.getMonth() === now.getMonth() && 
-             startDate.getFullYear() === now.getFullYear();
+      return startDate.getMonth() === currentMonth && 
+             startDate.getFullYear() === currentYear;
     })
-    .reduce((sum, sub) => sum + sub.amount, 0);
+    .reduce((sum, sub) => sum + getValue(sub), 0);
+
+  // Debug logging (remove after fixing)
+  console.log('Dashboard Debug:', {
+    total: activeSubscriptions.length,
+    recurring: activeSubscriptions.filter(s => s.frequency !== 'one-off').length,
+    oneOff: activeSubscriptions.filter(s => s.frequency === 'one-off').length,
+    oneOffThisMonthCount: activeSubscriptions.filter(s => {
+      if (s.frequency !== 'one-off') return false;
+      const startDate = new Date(s.startDate);
+      return startDate.getMonth() === currentMonth && startDate.getFullYear() === currentYear;
+    }).length,
+    topCategory,
+    topPayee,
+    recurringTotal,
+    oneOffThisMonth,
+  });
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -55,7 +81,7 @@ export default function DashboardCards({ subscriptions, displayCurrency }: Dashb
         iconBg="bg-purple-100"
         label="Top Category"
         value={topCategory ? topCategory[0] : 'N/A'}
-        subValue={topCategory ? formatCurrency(topCategory[1], displayCurrency) + '/mo' : ''}
+        subValue={topCategory ? formatCurrency(topCategory[1], displayCurrency) : ''}
       />
       
       <DashboardCard
@@ -63,7 +89,7 @@ export default function DashboardCards({ subscriptions, displayCurrency }: Dashb
         iconBg="bg-red-100"
         label="Biggest Payee"
         value={topPayee ? (topPayee[0].length > 12 ? topPayee[0].slice(0, 12) + '...' : topPayee[0]) : 'N/A'}
-        subValue={topPayee ? formatCurrency(topPayee[1], displayCurrency) + '/mo' : ''}
+        subValue={topPayee ? formatCurrency(topPayee[1], displayCurrency) : ''}
       />
       
       <DashboardCard

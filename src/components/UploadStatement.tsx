@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Upload, X, Image as ImageIcon, FileText, CheckCircle, Circle, AlertCircle, RefreshCw } from 'lucide-react';
-
+import { parsePDF } from '../utils/pdfParser';
 import { convertTransactionsToSubscriptions, DetectedSubscription } from '../utils/subscriptionDetector';
 import { Subscription, CurrencyType } from '../types';
 import { formatCurrency } from '../utils/dates';
@@ -49,8 +49,8 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
 
   try {
     // Use the new position-based parser
-    const { parseAmexPDF } = await import('../utils/pdfParser');
-    const transactions = await parseAmexPDF(dataUrl);
+    const { parsePDF } = await import('../utils/pdfParser');
+    const transactions = await parsePDF(dataUrl);
 
     setRawTransactionCount(transactions.length);
     console.log('Parsed transactions:', transactions.length);
@@ -144,6 +144,7 @@ const handleImportSelected = () => {
         cancelled: false,
         screenshot: preview || undefined,
         user_id: '',
+        tags: ['Business'],
       });
     }
   });

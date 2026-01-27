@@ -28,14 +28,22 @@ interface RowData {
   items: PositionedText[];
 }
 
-// Month name to number mapping
-const MONTHS: Record<string, number> = {
+type BankType = 'amex' | 'hangseng' | 'unknown';
+
+// Month name to number mapping (full names for AMEX)
+const MONTHS_FULL: Record<string, number> = {
   january: 0, february: 1, march: 2, april: 3,
   may: 4, june: 5, july: 6, august: 7,
   september: 8, october: 9, november: 10, december: 11,
 };
 
-const SKIP_PATTERNS = [
+// Month abbreviations for Hang Seng
+const MONTHS_ABBR: Record<string, number> = {
+  JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
+  JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
+};
+
+const SKIP_PATTERNS_AMEX = [
   /^payment received/i,
   /^direct debit/i,
   /^autopay/i,
@@ -45,6 +53,34 @@ const SKIP_PATTERNS = [
   /會員/,
   /截數/,
   /月結單/,
+];
+
+const SKIP_PATTERNS_HANGSENG = [
+  /^opening balance/i,
+  /^autopay pymt/i,
+  /^card total/i,
+  /^fee-overseas txn/i,
+  /^total hkjc/i,
+  /hkjc facility charges/i,
+  /non hkjc new activities/i,
+  /^trans date/i,
+  /^post date/i,
+  /^new activity/i,
+  /^amount$/i,
+  /member no\./i,
+  /^account no/i,
+  /closing date/i,
+  /payment due/i,
+  /minimum payment/i,
+  /credit limit/i,
+  /previous balance/i,
+  /new balance/i,
+  /finance charge/i,
+  /will be deducted/i,
+  /please note/i,
+  /apple pay-others/i,
+  /foreign currency amount/i,
+  /exchange rate/i,
 ];
 
 export async function extractTextFromPDF(dataUrl: string): Promise<string> {
@@ -148,14 +184,34 @@ export async function extractPositionedText(dataUrl: string): Promise<RowData[]>
   return allRows;
 }
 
-function parseDate(dateStr: string, year: number): string | null {
+// Detect which bank the statement is from
+function detectBank(rows: RowData[]): BankType {
+  const allText = rows.map(r => r.items.map(i => i.text).join(' ')).join(' ').toUpperCase();
+  
+  if (allText.includes('HANG SENG BANK') || allText.includes('恒生銀行') || allText.includes('HKJC')) {
+    return 'hangseng';
+  }
+  if (allText.includes('AMERICAN EXPRESS') || allText.includes('AMEX')) {
+    return 'amex';
+  }
+  
+  // Default to amex pattern detection (Month Day format)
+  if (/JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER/.test(allText)) {
+    return 'amex';
+  }
+  
+  return 'unknown';
+}
+
+// Parse AMEX date: "Month Day" -> "YYYY-MM-DD"
+function parseAmexDate(dateStr: string, year: number): string | null {
   const match = dateStr.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})$/i);
   
   if (!match) return null;
   
   const monthName = match[1].toLowerCase();
   const day = parseInt(match[2], 10);
-  const month = MONTHS[monthName];
+  const month = MONTHS_FULL[monthName];
   
   if (month === undefined || isNaN(day)) return null;
   
@@ -168,8 +224,23 @@ function parseDate(dateStr: string, year: number): string | null {
   return `${actualYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function parseAmount(text: string): number | null {
-  // Clean the text and look for amount pattern
+// Parse Hang Seng date: "DD MMM YYYY" -> "YYYY-MM-DD"
+function parseHangSengDate(dateStr: string): string | null {
+  const match = dateStr.match(/^(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{4})$/i);
+  if (!match) return null;
+  
+  const day = parseInt(match[1], 10);
+  const monthAbbr = match[2].toUpperCase();
+  const year = parseInt(match[3], 10);
+  
+  const month = MONTHS_ABBR[monthAbbr];
+  if (!month) return null;
+  
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// Parse amount for AMEX
+function parseAmexAmount(text: string): number | null {
   const cleaned = text.replace(/,/g, '').trim();
   const match = cleaned.match(/^(\d+\.\d{2})$/);
   
@@ -180,17 +251,33 @@ function parseAmount(text: string): number | null {
   return null;
 }
 
-function shouldSkipRow(rowText: string): boolean {
-  return SKIP_PATTERNS.some(pattern => pattern.test(rowText));
+// Parse Hang Seng amount (handles "123.45-" for credits)
+function parseHangSengAmount(text: string): { amount: number; isCredit: boolean } | null {
+  const cleaned = text.replace(/,/g, '').trim();
+  const match = cleaned.match(/^(\d+\.\d{2})(-?)$/);
+  
+  if (match) {
+    const amount = parseFloat(match[1]);
+    const isCredit = match[2] === '-';
+    return isNaN(amount) ? null : { amount, isCredit };
+  }
+  return null;
+}
+
+function shouldSkipRowAmex(rowText: string): boolean {
+  return SKIP_PATTERNS_AMEX.some(pattern => pattern.test(rowText));
+}
+
+function shouldSkipRowHangSeng(rowText: string): boolean {
+  return SKIP_PATTERNS_HANGSENG.some(pattern => pattern.test(rowText));
 }
 
 function detectStatementYear(rows: RowData[]): number {
-  // Look for year in the first few rows
   for (const row of rows.slice(0, 20)) {
     const text = row.items.map(i => i.text).join(' ');
     
-    // Match patterns like "2026 1 11" or "2026年1月"
-    const match = text.match(/\b(202[0-9])\s+\d{1,2}\s+\d{1,2}\b/);
+    // Match patterns like "2026 1 11" or "31 DEC 2025"
+    const match = text.match(/\b(202[0-9])\b/);
     if (match) {
       return parseInt(match[1], 10);
     }
@@ -199,26 +286,134 @@ function detectStatementYear(rows: RowData[]): number {
   return new Date().getFullYear();
 }
 
-export async function parseAmexPDF(dataUrl: string): Promise<Transaction[]> {
+// Main parser - auto-detects bank and routes to appropriate parser
+export async function parsePDF(dataUrl: string): Promise<Transaction[]> {
   const rows = await extractPositionedText(dataUrl);
+  const bank = detectBank(rows);
+  
+  console.log(`Detected bank: ${bank}`);
+  
+  switch (bank) {
+    case 'hangseng':
+      return parseHangSengFromRows(rows);
+    case 'amex':
+      return parseAmexFromRows(rows);
+    default:
+      // Try both and return whichever finds more transactions
+      const amexResults = await parseAmexFromRows(rows);
+      const hangSengResults = await parseHangSengFromRows(rows);
+      return amexResults.length >= hangSengResults.length ? amexResults : hangSengResults;
+  }
+}
+
+// Parse Hang Seng statement from positioned rows
+function parseHangSengFromRows(rows: RowData[]): Transaction[] {
+  const transactions: Transaction[] = [];
+  
+  console.log(`Parsing Hang Seng statement with ${rows.length} rows`);
+
+  for (const row of rows) {
+    const items = row.items;
+    if (items.length < 3) continue;
+
+    const rowText = items.map(i => i.text).join(' ');
+    if (shouldSkipRowHangSeng(rowText)) continue;
+
+    // Look for pattern: "DD MMM YYYY" at start (trans date)
+    // Hang Seng has two dates: trans date and post date
+    let transDateStr = '';
+    let dateEndIndex = 0;
+    
+    // Try to find "DD MMM YYYY" pattern in first items
+    for (let i = 0; i < Math.min(5, items.length); i++) {
+      const combined = items.slice(0, i + 1).map(it => it.text).join(' ').trim();
+      if (/^\d{1,2}\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{4}$/i.test(combined)) {
+        transDateStr = combined;
+        dateEndIndex = i + 1;
+        break;
+      }
+    }
+
+    if (!transDateStr) continue;
+
+    const parsedDate = parseHangSengDate(transDateStr);
+    if (!parsedDate) continue;
+
+    // Skip the post date (another DD MMM YYYY pattern)
+    let descStartIndex = dateEndIndex;
+    for (let i = dateEndIndex; i < Math.min(dateEndIndex + 4, items.length); i++) {
+      const combined = items.slice(dateEndIndex, i + 1).map(it => it.text).join(' ').trim();
+      if (/^\d{1,2}\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{4}$/i.test(combined)) {
+        descStartIndex = i + 1;
+        break;
+      }
+    }
+
+    // Look for amount at the end
+    let amount: number | null = null;
+    let isCredit = false;
+    let amountStartIndex = items.length;
+
+    for (let i = items.length - 1; i >= descStartIndex; i--) {
+      const parsed = parseHangSengAmount(items[i].text);
+      if (parsed !== null && parsed.amount > 0) {
+        amount = parsed.amount;
+        isCredit = parsed.isCredit;
+        amountStartIndex = i;
+        break;
+      }
+    }
+
+    if (amount === null || amount <= 0) continue;
+    
+    // Skip credits (payments)
+    if (isCredit) continue;
+
+    // Everything between dates and amount is the description
+    const descriptionParts = items.slice(descStartIndex, amountStartIndex).map(i => i.text);
+    let description = descriptionParts.join(' ').trim();
+
+    // Clean up description - remove location codes like "HK", "IE", "AU", "MY", "US"
+    description = description
+      .replace(/\s+(HK|IE|AU|MY|US|SG|GB|JP|CN)$/i, '') // Remove country codes at end
+      .replace(/\s+(Hong Kong|HONG KONG|HongKong|KUALA LUMPUR|SAGGART).*$/i, '') // Remove locations
+      .replace(/\s+\d{10,}$/g, '') // Remove long numbers (reference codes)
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (description.length < 2) continue;
+
+    transactions.push({
+      date: parsedDate,
+      description,
+      amount,
+      currency: 'HKD',
+      rawText: rowText,
+    });
+  }
+
+  console.log(`parseHangSengFromRows found ${transactions.length} transactions`);
+  return transactions;
+}
+
+// Parse AMEX statement from positioned rows
+function parseAmexFromRows(rows: RowData[]): Transaction[] {
   const transactions: Transaction[] = [];
   
   const statementYear = detectStatementYear(rows);
-  console.log(`Detected statement year: ${statementYear}`);
+  console.log(`Parsing AMEX statement, year: ${statementYear}`);
 
   for (const row of rows) {
     const items = row.items;
     if (items.length < 2) continue;
 
-    // Get full row text for skip check
     const rowText = items.map(i => i.text).join(' ');
-    if (shouldSkipRow(rowText)) continue;
+    if (shouldSkipRowAmex(rowText)) continue;
 
     // Look for date at the start (leftmost items)
     let dateStr = '';
     let dateEndIndex = 0;
     
-    // Try to find "Month Day" pattern in first few items
     for (let i = 0; i < Math.min(3, items.length); i++) {
       const combined = items.slice(0, i + 1).map(it => it.text).join(' ').trim();
       if (/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}$/i.test(combined)) {
@@ -230,15 +425,15 @@ export async function parseAmexPDF(dataUrl: string): Promise<Transaction[]> {
 
     if (!dateStr) continue;
 
-    const parsedDate = parseDate(dateStr, statementYear);
+    const parsedDate = parseAmexDate(dateStr, statementYear);
     if (!parsedDate) continue;
 
-    // Look for amount at the end (rightmost items)
+    // Look for amount at the end
     let amount: number | null = null;
     let amountStartIndex = items.length;
 
     for (let i = items.length - 1; i >= dateEndIndex; i--) {
-      const potentialAmount = parseAmount(items[i].text);
+      const potentialAmount = parseAmexAmount(items[i].text);
       if (potentialAmount !== null && potentialAmount > 0) {
         amount = potentialAmount;
         amountStartIndex = i;
@@ -252,15 +447,13 @@ export async function parseAmexPDF(dataUrl: string): Promise<Transaction[]> {
     const descriptionParts = items.slice(dateEndIndex, amountStartIndex).map(i => i.text);
     let description = descriptionParts.join(' ').trim();
 
-    // Clean up description
     description = description
       .replace(/\s+/g, ' ')
-      .replace(/[^\w\s\-\&\*\.\']/g, '') // Remove special chars except common ones
+      .replace(/[^\w\s\-\&\*\.\']/g, '')
       .trim();
 
     if (description.length < 2) continue;
 
-    // Skip if it's a credit/payment
     if (/^(payment|credit|autopay|direct debit)/i.test(description)) continue;
 
     transactions.push({
@@ -272,19 +465,22 @@ export async function parseAmexPDF(dataUrl: string): Promise<Transaction[]> {
     });
   }
 
-  console.log(`parseAmexPDF found ${transactions.length} transactions`);
+  console.log(`parseAmexFromRows found ${transactions.length} transactions`);
   return transactions;
+}
+
+// Legacy export for backward compatibility
+export async function parseAmexPDF(dataUrl: string): Promise<Transaction[]> {
+  return parsePDF(dataUrl);
 }
 
 // Legacy functions for backward compatibility
 export function parseTransactionsFromText(text: string): Transaction[] {
-  // This is now a fallback - the main parsing uses parseAmexPDF
   console.log('Using legacy text parser as fallback');
   return [];
 }
 
 export function parseAmexStatement(text: string): Transaction[] {
-  // This is now a fallback - the main parsing uses parseAmexPDF
   console.log('Using legacy AMEX parser as fallback');
   return [];
 }

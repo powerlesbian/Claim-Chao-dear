@@ -23,27 +23,23 @@ export const filterSubscriptions = (
 /**
  * Sort subscriptions by the selected option
  */
-export const sortSubscriptions = (
+export function sortSubscriptions(
   subscriptions: Subscription[],
   sortOption: SortOption,
   displayCurrency: CurrencyType
-): Subscription[] => {
-  const sorted = [...subscriptions];
-
-  switch (sortOption) {
-    case 'alphabetical':
-      return sorted.sort((a, b) => a.name.localeCompare(b.name));
-    case 'value-high':
-      return sorted.sort(
-        (a, b) =>
-          getMonthlyValue(b, displayCurrency) - getMonthlyValue(a, displayCurrency)
-      );
-    case 'value-low':
-      return sorted.sort(
-        (a, b) =>
-          getMonthlyValue(a, displayCurrency) - getMonthlyValue(b, displayCurrency)
-      );
-    default:
-      return sorted;
-  }
-};
+): Subscription[] {
+  return [...subscriptions].sort((a, b) => {
+    switch (sortOption) {
+      case 'alphabetical':
+        return a.name.localeCompare(b.name);
+      case 'value-high':
+        return getMonthlyValue(b, displayCurrency) - getMonthlyValue(a, displayCurrency);
+      case 'value-low':
+        return getMonthlyValue(a, displayCurrency) - getMonthlyValue(b, displayCurrency);
+      case 'recent':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      default:
+        return 0;
+    }
+  });
+}

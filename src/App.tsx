@@ -540,6 +540,7 @@ function ViewControls({
             onChange={(e) => onSortChange(e.target.value as SortOption)}
             className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
           >
+            <option value="recent">Recently Added</option>
             <option value="alphabetical">A-Z</option>
             <option value="value-high">Highest Value</option>
             <option value="value-low">Lowest Value</option>
