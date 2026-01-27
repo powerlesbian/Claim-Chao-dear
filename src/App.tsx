@@ -10,7 +10,7 @@ import { filterSubscriptions, sortSubscriptions } from './utils/filters';
 import { exportToCSV } from './utils/csv';
 import { useAuth } from './contexts/AuthContext';
 import { useSubscriptions } from './hooks/useSubscriptions';
-
+import Toast from './components/Toast';
 import Auth from './components/Auth';
 import SubscriptionForm from './components/SubscriptionForm';
 import SubscriptionList from './components/SubscriptionList';
@@ -49,6 +49,8 @@ function App() {
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
+  // Add state near other useState calls
+  const [toast, setToast] = useState<string | null>(null);
 
   // Preferences
   const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
@@ -104,12 +106,13 @@ function App() {
     setShowForm(true);
   };
 
-  const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[]) => {
-    const result = await addMany(imported);
-    if (result.length > 0) {
-      setShowCSVImport(false);
-    }
-  };
+const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[]) => {
+  const result = await addMany(imported);
+  if (result.length > 0) {
+    setShowCSVImport(false);
+    setToast(`Imported ${result.length} transaction${result.length > 1 ? 's' : ''}! View in "All Payments" tab.`);
+  }
+};
 
   const handleRecovery = async (recovered: Omit<Subscription, 'id' | 'createdAt'>[]) => {
     const result = await addMany(recovered);
@@ -298,6 +301,12 @@ function App() {
       {showRecovery && (
         <LocalStorageRecovery onRecover={handleRecovery} onCancel={() => setShowRecovery(false)} />
       )}
+
+      {showRecovery && (
+        <LocalStorageRecovery onRecover={handleRecovery} onCancel={() => setShowRecovery(false)} />
+      )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

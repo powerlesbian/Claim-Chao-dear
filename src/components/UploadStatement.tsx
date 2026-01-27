@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Upload, X, Image as ImageIcon, FileText, CheckCircle, Circle, AlertCircle } from 'lucide-react';
-import { extractTextFromPDF, parseTransactionsFromText } from '../utils/pdfParser';
-import { detectSubscriptions, DetectedSubscription } from '../utils/subscriptionDetector';
-import { Subscription } from '../types';
+import { Upload, X, Image as ImageIcon, FileText, CheckCircle, Circle, AlertCircle, RefreshCw } from 'lucide-react';
+
+import { convertTransactionsToSubscriptions, DetectedSubscription } from '../utils/subscriptionDetector';
+import { Subscription, CurrencyType } from '../types';
+import { formatCurrency } from '../utils/dates';
+import { Transaction } from '../utils/pdfParser';
 
 interface UploadStatementProps {
   onUpload: (screenshot: string) => void;
@@ -16,9 +18,10 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
   const [fileType, setFileType] = useState<'image' | 'pdf' | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [parsing, setParsing] = useState(false);
-  const [detectedSubscriptions, setDetectedSubscriptions] = useState<DetectedSubscription[]>([]);
+  const [parsedTransactions, setParsedTransactions] = useState<DetectedSubscription[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [rawTransactionCount, setRawTransactionCount] = useState(0);
 
   const handleFileChange = async (file: File) => {
     if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
@@ -38,38 +41,40 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
     }
   };
 
-  const parsePDF = async (dataUrl: string) => {
-    setParsing(true);
-    setError(null);
-    try {
-      const text = await extractTextFromPDF(dataUrl);
-      console.log('Extracted text length:', text.length);
+ const parsePDF = async (dataUrl: string) => {
+  setParsing(true);
+  setError(null);
+  setParsedTransactions([]);
+  setSelectedIds(new Set());
 
-      const transactions = parseTransactionsFromText(text);
-      console.log('Parsed transactions:', transactions.length);
+  try {
+    // Use the new position-based parser
+    const { parseAmexPDF } = await import('../utils/pdfParser');
+    const transactions = await parseAmexPDF(dataUrl);
 
-      if (transactions.length === 0) {
-        setError('No transactions found in the PDF. The file may be an image-based PDF or have an unsupported format.');
-        setParsing(false);
-        return;
-      }
+    setRawTransactionCount(transactions.length);
+    console.log('Parsed transactions:', transactions.length);
 
-      const detected = detectSubscriptions(transactions);
-      console.log('Detected subscriptions:', detected.length);
-
-      if (detected.length === 0) {
-        setError(`Found ${transactions.length} transactions but no recurring subscriptions detected. You can still attach this file to a subscription manually.`);
-      } else {
-        setDetectedSubscriptions(detected);
-        setSelectedIds(new Set(detected.map((_, i) => i)));
-      }
-    } catch (err) {
-      console.error('Error parsing PDF:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(`Failed to parse PDF: ${errorMessage}. You can still attach this file to a subscription manually.`);
+    if (transactions.length === 0) {
+      setError('No transactions found in the PDF. The file may be an image-based PDF or have an unsupported format.');
+      setParsing(false);
+      return;
     }
-    setParsing(false);
-  };
+
+    // Convert all transactions to importable format
+    const detected = convertTransactionsToSubscriptions(transactions, 'HKD');
+    console.log('Converted to subscriptions:', detected.length);
+
+    setParsedTransactions(detected);
+    setSelectedIds(new Set(detected.map((_, i) => i)));
+
+  } catch (err) {
+    console.error('Error parsing PDF:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    setError(`Failed to parse PDF: ${errorMessage}. You can still attach this file to a subscription manually.`);
+  }
+  setParsing(false);
+};
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -113,37 +118,55 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
     setSelectedIds(newSelected);
   };
 
-  const handleImportSelected = () => {
-    if (!onImportSubscriptions) return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const subscriptionsToImport: Omit<Subscription, 'id' | 'createdAt'>[] = [];
-
-    detectedSubscriptions.forEach((detected, index) => {
-      if (selectedIds.has(index)) {
-        subscriptionsToImport.push({
-          name: detected.name,
-          amount: detected.amount,
-          currency: 'USD',
-          frequency: detected.frequency,
-          category: detected.category,
-          startDate: today,
-          notes: `Auto-detected from ${fileName} (${Math.round(detected.confidence * 100)}% confidence)`,
-          cancelled: false,
-          screenshot: preview || undefined,
-        });
-      }
-    });
-
-    if (subscriptionsToImport.length > 0) {
-      onImportSubscriptions(subscriptionsToImport);
-    }
+  const selectAll = () => {
+    setSelectedIds(new Set(parsedTransactions.map((_, i) => i)));
   };
+
+  const selectNone = () => {
+    setSelectedIds(new Set());
+  };
+
+const handleImportSelected = () => {
+  if (!onImportSubscriptions) return;
+
+  const subscriptionsToImport: Omit<Subscription, 'id' | 'createdAt'>[] = [];
+
+  parsedTransactions.forEach((detected, index) => {
+    if (selectedIds.has(index)) {
+      subscriptionsToImport.push({
+        name: detected.name,
+        amount: detected.amount,
+        currency: detected.currency,
+        frequency: detected.frequency,
+        category: detected.category,
+        startDate: detected.date || new Date().toISOString().split('T')[0],
+        notes: `Imported from ${fileName}`,
+        cancelled: false,
+        screenshot: preview || undefined,
+        user_id: '',
+      });
+    }
+  });
+
+  if (subscriptionsToImport.length > 0) {
+    onImportSubscriptions(subscriptionsToImport);
+
+    // Show success message
+    const count = subscriptionsToImport.length;
+    alert(`Successfully imported ${count} transaction${count > 1 ? 's' : ''}!\n\nView them in the "All Payments" tab.`);
+    
+    onCancel(); // Close the modal after import
+  }
+};
+
+  const totalSelected = parsedTransactions
+    .filter((_, i) => selectedIds.has(i))
+    .reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-xl font-semibold text-gray-900">Upload Bank Statement</h2>
           <button
             onClick={onCancel}
@@ -182,17 +205,26 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
                 />
                 Choose File
               </label>
+              <p className="text-xs text-gray-400 mt-4">
+                Supports: American Express HK statements (PDF)
+              </p>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="relative">
                 {fileType === 'pdf' ? (
-                  <div className="flex flex-col items-center justify-center p-12 bg-gray-50 rounded-lg border-2 border-gray-200">
-                    <FileText className="h-24 w-24 text-gray-400 mb-4" />
+                  <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg border-2 border-gray-200">
+                    <FileText className="h-16 w-16 text-gray-400 mb-3" />
                     <p className="text-lg font-medium text-gray-900 mb-1">{fileName}</p>
-                    <p className="text-sm text-gray-500">PDF uploaded successfully</p>
-                    {parsing && (
-                      <p className="text-sm text-blue-600 mt-2">Analyzing PDF...</p>
+                    {parsing ? (
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <RefreshCw className="animate-spin" size={16} />
+                        <span className="text-sm">Analyzing PDF...</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-green-600">
+                        Found {rawTransactionCount} transactions
+                      </p>
                     )}
                   </div>
                 ) : (
@@ -207,7 +239,7 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
                     setPreview(null);
                     setFileType(null);
                     setFileName('');
-                    setDetectedSubscriptions([]);
+                    setParsedTransactions([]);
                     setSelectedIds(new Set());
                     setError(null);
                   }}
@@ -229,47 +261,76 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
                 </div>
               )}
 
-              {!parsing && detectedSubscriptions.length > 0 && (
+              {!parsing && parsedTransactions.length > 0 && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={20} />
-                    <div className="flex-1">
-                      <p className="font-medium text-green-900 mb-1">
-                        Found {detectedSubscriptions.length} potential subscription{detectedSubscriptions.length > 1 ? 's' : ''}
-                      </p>
-                      <p className="text-sm text-green-800">
-                        Select the subscriptions you want to import:
-                      </p>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={20} />
+                      <div>
+                        <p className="font-medium text-green-900 mb-1">
+                          {parsedTransactions.length} transaction{parsedTransactions.length > 1 ? 's' : ''} found
+                        </p>
+                        <p className="text-sm text-green-800">
+                          Selected: {selectedIds.size} ({formatCurrency(totalSelected, 'HKD')})
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={selectAll}
+                        className="text-xs text-green-700 hover:text-green-900 font-medium"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-green-400">|</span>
+                      <button
+                        onClick={selectNone}
+                        className="text-xs text-green-700 hover:text-green-900 font-medium"
+                      >
+                        Select None
+                      </button>
                     </div>
                   </div>
 
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {detectedSubscriptions.map((sub, index) => (
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {parsedTransactions.map((item, index) => (
                       <div
                         key={index}
                         onClick={() => toggleSelection(index)}
-                        className="flex items-start gap-3 p-3 bg-white rounded-lg border border-green-200 cursor-pointer hover:bg-green-50 transition-colors"
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedIds.has(index)
+                            ? 'bg-white border-green-300'
+                            : 'bg-green-50/50 border-green-100 opacity-60'
+                        }`}
                       >
                         <div className="mt-0.5">
                           {selectedIds.has(index) ? (
-                            <CheckCircle className="text-green-600" size={20} />
+                            <CheckCircle className="text-green-600" size={18} />
                           ) : (
-                            <Circle className="text-gray-400" size={20} />
+                            <Circle className="text-gray-400" size={18} />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium text-gray-900">{sub.name}</p>
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
-                              {sub.category}
-                            </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <p className="font-medium text-gray-900 truncate">{item.name}</p>
+                              {item.isRecurring && (
+                                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-medium flex-shrink-0">
+                                  Recurring
+                                </span>
+                              )}
+                            </div>
+                            <p className="font-semibold text-gray-900 flex-shrink-0">
+                              {formatCurrency(item.amount, item.currency)}
+                            </p>
                           </div>
-                          <p className="text-sm text-gray-600">
-                            ${sub.amount.toFixed(2)} / {sub.frequency}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {Math.round(sub.confidence * 100)}% confidence • {sub.transactions.length} transaction{sub.transactions.length > 1 ? 's' : ''} found
-                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                              {item.category}
+                            </span>
+                            <span className="text-xs text-gray-500">{item.date}</span>
+                            <span className="text-xs text-gray-400">{item.frequency}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -277,7 +338,7 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
                 </div>
               )}
 
-              {!parsing && detectedSubscriptions.length === 0 && !error && fileType === 'pdf' && (
+              {!parsing && parsedTransactions.length === 0 && !error && fileType === 'pdf' && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex gap-3">
                     <FileText className="text-blue-600 flex-shrink-0" size={20} />
@@ -312,13 +373,13 @@ export default function UploadStatement({ onUpload, onCancel, onImportSubscripti
                 >
                   Cancel
                 </button>
-                {detectedSubscriptions.length > 0 && selectedIds.size > 0 ? (
+                {parsedTransactions.length > 0 && selectedIds.size > 0 ? (
                   <button
                     onClick={handleImportSelected}
                     disabled={!onImportSubscriptions}
                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Import {selectedIds.size} Subscription{selectedIds.size > 1 ? 's' : ''}
+                    Import {selectedIds.size} Transaction{selectedIds.size > 1 ? 's' : ''}
                   </button>
                 ) : (
                   <button
