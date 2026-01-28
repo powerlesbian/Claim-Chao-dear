@@ -2,8 +2,10 @@ import { useState, useMemo } from 'react';
 import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, ArrowUpDown, Settings, Users } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption, DEFAULT_TAGS } from './types';
 import { getSortPreference, setSortPreference } from './utils/storage';
+import { formatCurrency } from './utils/dates';
 import { getUpcomingPayments } from './utils/dates';
 import { getDisplayCurrency, setDisplayCurrency } from './utils/currency';
+import { convertCurrency } from './utils/currency';
 import { calculateTotalMonthly } from './utils/calculations';
 import { detectDuplicates } from './utils/duplicateDetection';
 import { filterSubscriptions, sortSubscriptions } from './utils/filters';
@@ -59,6 +61,7 @@ function App() {
   const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
   const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 // Tag filtering state
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customTags, setCustomTags] = useState<string[]>([]);
@@ -82,6 +85,19 @@ const [showTeamSettings, setShowTeamSettings] = useState(false);
   }, [subscriptions, customTags]);
 
   // Handlers
+  // Add toggle handler
+const handleToggleSelect = (id: string) => {
+  setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    return next;
+  });
+};
+
   const handleCurrencyChange = (currency: CurrencyType) => {
     setDisplayCurrencyState(currency);
     setDisplayCurrency(currency);
@@ -198,6 +214,12 @@ const handleTagRename = async (oldTag: string, newTag: string) => {
   };
 
   // Filter subscriptions by selected tags
+  // Calculate selected total (add near other useMemo calculations)
+const selectedTotal = useMemo(() => {
+  return subscriptions
+    .filter(s => selectedIds.has(s.id))
+    .reduce((sum, s) => sum + convertCurrency(s.amount, s.currency, displayCurrency), 0);
+}, [subscriptions, selectedIds, displayCurrency]);
   const tagFilteredSubscriptions = useMemo(() => {
     if (selectedTags.length === 0) {
       return subscriptions; // No filter = show all
@@ -358,6 +380,8 @@ const handleTagRename = async (oldTag: string, newTag: string) => {
             <SubscriptionList
               subscriptions={sortedSubscriptions}
               duplicateIds={duplicateIds}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
               onEdit={handleEdit}
               onDelete={remove}
               onToggleCancelled={toggleCancelled}
@@ -428,7 +452,18 @@ const handleTagRename = async (oldTag: string, newTag: string) => {
       {showRecovery && (
         <LocalStorageRecovery onRecover={handleRecovery} onCancel={() => setShowRecovery(false)} />
       )}
-
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 z-50">
+          <span className="font-medium">{selectedIds.size} selected</span>
+          <span className="text-xl font-bold">{formatCurrency(selectedTotal, displayCurrency)}</span>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
+          >
+            Clear
+          </button>
+        </div>
+      )}
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Edit2, Trash2, CheckCircle, XCircle, Image, Filter } from 'lucide-react';
+
 import { Subscription, Category } from '../types';
 import { formatCurrency, formatDate, calculateNextPaymentDate } from '../utils/dates';
 import { supabase } from '../lib/supabase';
+import { Edit2, Trash2, CheckCircle, XCircle, Image, Filter, Square, CheckSquare } from 'lucide-react';
 
 interface SubscriptionListProps {
   subscriptions: Subscription[];
@@ -11,6 +12,8 @@ interface SubscriptionListProps {
   onDelete: (id: string) => void;
   onToggleCancelled: (id: string, cancelled: boolean) => void;
   onViewScreenshot: (screenshot: string) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }
 
 export default function SubscriptionList({
@@ -19,7 +22,9 @@ export default function SubscriptionList({
   onEdit,
   onDelete,
   onToggleCancelled,
-  onViewScreenshot
+  onViewScreenshot,
+  selectedIds = new Set(),
+  onToggleSelect
 }: SubscriptionListProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -90,6 +95,8 @@ export default function SubscriptionList({
                 key={subscription.id}
                 subscription={subscription}
                 isDuplicate={duplicateIds.has(subscription.id)}
+                isSelected={selectedIds.has(subscription.id)}
+                onToggleSelect={onToggleSelect}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleCancelled={onToggleCancelled}
@@ -125,6 +132,8 @@ export default function SubscriptionList({
 function SubscriptionCard({
   subscription,
   isDuplicate = false,
+  isSelected = false,
+  onToggleSelect,
   onEdit,
   onDelete,
   onToggleCancelled,
@@ -132,6 +141,8 @@ function SubscriptionCard({
 }: {
   subscription: Subscription;
   isDuplicate?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
   onEdit: (subscription: Subscription) => void;
   onDelete: (id: string) => void;
   onToggleCancelled: (id: string, cancelled: boolean) => void;
@@ -143,13 +154,23 @@ function SubscriptionCard({
 
   return (
     <div className={`rounded-lg border p-4 shadow-sm hover:shadow-md transition-shadow ${
-      isDuplicate
+      isSelected
+        ? 'bg-blue-50 border-blue-300'
+        : isDuplicate
         ? 'bg-yellow-50 border-yellow-300'
         : subscription.cancelled
         ? 'bg-white border-gray-200 opacity-75'
         : 'bg-white border-gray-200'
     }`}>
       <div className="flex items-start justify-between">
+        {onToggleSelect && (
+          <button
+            onClick={() => onToggleSelect(subscription.id)}
+            className="mr-3 mt-1 text-gray-400 hover:text-blue-600"
+          >
+            {isSelected ? <CheckSquare size={22} className="text-blue-600" /> : <Square size={22} />}
+          </button>
+        )}
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <h4 className="text-lg font-semibold text-gray-900">{subscription.name}</h4>
