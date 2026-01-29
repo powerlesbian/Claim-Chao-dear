@@ -34,7 +34,8 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
     return values;
   };
 
-  const normalizeFrequency = (freq: string): 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one-off' => {
+  const normalizeFrequency = (freq: string | undefined): 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one-off' => {
+    if (!freq) return 'monthly';
     const normalized = freq.toLowerCase().trim();
     if (normalized === 'one-off' || normalized === 'oneoff' || normalized === 'once') {
       return 'one-off';
