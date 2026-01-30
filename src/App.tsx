@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, ArrowUpDown, Settings, Users } from 'lucide-react';
+import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, Trash2, ArrowUpDown, Settings, Users } from 'lucide-react';
 import { Subscription, CurrencyType, SortOption, DEFAULT_TAGS } from './types';
 import { getSortPreference, setSortPreference } from './utils/storage';
 import { formatCurrency } from './utils/dates';
@@ -68,6 +68,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
 //team settings modal
 const [showTeamSettings, setShowTeamSettings] = useState(false);
+const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); 
 
   // Preferences
   const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
@@ -86,17 +87,38 @@ const [showTeamSettings, setShowTeamSettings] = useState(false);
 
   // Handlers
   // Add toggle handler
-const handleToggleSelect = (id: string) => {
-  setSelectedIds(prev => {
-    const next = new Set(prev);
-    if (next.has(id)) {
-      next.delete(id);
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+  const handleSelectAll = () => {
+    if (selectedIds.size === sortedSubscriptions.length) {
+      // If all are selected, deselect all
+      setSelectedIds(new Set());
     } else {
-      next.add(id);
+      // Select all visible subscriptions
+      setSelectedIds(new Set(sortedSubscriptions.map(s => s.id)));
     }
-    return next;
-  });
-};
+  };
+
+  const handleDeleteSelected = async () => {
+    const idsArray = Array.from(selectedIds);
+    
+    for (const id of idsArray) {
+      await remove(id);
+    }
+    
+    setSelectedIds(new Set());
+    setShowDeleteConfirm(false);
+    setToast(`Deleted ${idsArray.length} payment${idsArray.length > 1 ? 's' : ''}`);
+  };
 
   const handleCurrencyChange = (currency: CurrencyType) => {
     setDisplayCurrencyState(currency);
@@ -358,6 +380,9 @@ const selectedTotal = useMemo(() => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onExport={() => exportToCSV(subscriptions)}
+          selectedCount={selectedIds.size}
+          totalCount={sortedSubscriptions.length}
+          onSelectAll={handleSelectAll}
         />
 
         {/* Content */}
@@ -464,6 +489,58 @@ const selectedTotal = useMemo(() => {
           </button>
         </div>
       )}
+              {/* Selection Summary Bar */}
+        {selectedIds.size > 0 && (
+          <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 z-50">
+            <span className="font-medium">{selectedIds.size} selected</span>
+            <span className="text-xl font-bold">{formatCurrency(selectedTotal, displayCurrency)}</span>
+            <button
+              onClick={handleSelectAll}
+              className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
+            >
+              {selectedIds.size === sortedSubscriptions.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="ml-2 px-3 py-1 bg-red-500 rounded-full hover:bg-red-600 text-sm flex items-center gap-2"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Selected Payments?</h2>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to permanently delete {selectedIds.size} payment{selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  Delete {selectedIds.size}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );
@@ -529,6 +606,9 @@ function ViewControls({
   searchQuery,
   onSearchChange,
   onExport,
+  selectedCount,
+  totalCount,
+  onSelectAll,
 }: {
   view: View;
   setView: (view: View) => void;
@@ -537,6 +617,9 @@ function ViewControls({
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onExport: () => void;
+  selectedCount: number;
+  totalCount: number;
+  onSelectAll: () => void;
 }) {
   return (
     <div className="mb-6">
@@ -595,6 +678,21 @@ function ViewControls({
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          
+          {/* Select All Button */}
+          {totalCount > 0 && (
+            <button
+              onClick={onSelectAll}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                selectedCount === totalCount
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+              }`}
+            >
+              {selectedCount === totalCount ? '✓ All Selected' : `Select All (${totalCount})`}
+            </button>
+          )}
+          
           <button
             onClick={onExport}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
@@ -607,6 +705,7 @@ function ViewControls({
     </div>
   );
 }
+
 
 function ActionBar({
   onUpload,
