@@ -67,6 +67,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
     const frequencyIndex = headers.indexOf('Frequency');
     const startDateIndex = headers.indexOf('Start Date');
     const categoryIndex = headers.indexOf('Category');
+    const notesIndex = headers.indexOf('Notes');
 
     const subscriptions: Omit<Subscription, 'id' | 'createdAt'>[] = [];
 
@@ -87,7 +88,10 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
       const startDate = values[startDateIndex];
       const category = categoryIndex >= 0 && values[categoryIndex]
         ? values[categoryIndex]
-        : 'Other';
+        : 'Happy Lodge';
+      const notes = notesIndex >= 0 && values[notesIndex]
+        ? values[notesIndex].trim()
+        : '';
 
       if (!name || isNaN(amount)) {
         continue;
@@ -104,6 +108,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
         frequency,
         startDate,
         category,
+        notes,
         cancelled: false,
       });
     }
@@ -183,13 +188,13 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
           <div className="mb-4">
             <h3 className="font-medium text-gray-900 mb-2">CSV Format</h3>
             <div className="bg-gray-50 p-3 rounded-lg text-xs font-mono overflow-x-auto">
-              <div>Name,Amount,Currency,Frequency,Start Date,Category</div>
+              <div>Name,Amount,Currency,Frequency,Start Date,Category,Notes</div>
               <div className="text-gray-600">Example: Netflix,119.00,HKD,Monthly,2026-01-01,Entertainment</div>
             </div>
             <p className="text-sm text-gray-600 mt-2">
               <strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off<br />
               <strong>Currency:</strong> HKD, SGD, or USD<br />
-              <strong>Category (optional):</strong> Any category from your list (defaults to "Other")
+              <strong>Category (optional):</strong> Any category from your list (defaults to &quot;Other&quot;)
             </p>
           </div>
 
@@ -251,6 +256,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
                             <th className="px-3 py-2 text-left font-medium text-gray-700">Name</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-700">Amount</th>
                             <th className="px-3 py-2 text-left font-medium text-gray-700">Frequency</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-700">Notes</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -261,6 +267,9 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
                                 {sub.amount.toFixed(2)} {sub.currency}
                               </td>
                               <td className="px-3 py-2 capitalize">{sub.frequency}</td>
+                              <td className="px-3 py-2 text-sm text-gray-600 max-w-xs truncate">
+                                {sub.notes || '-'}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
