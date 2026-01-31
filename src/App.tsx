@@ -304,7 +304,9 @@ const selectedTotal = useMemo(() => {
         <header className="mb-8">
           <div className="flex items-start justify-between mb-2 flex-wrap gap-4">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Claim Chowder</h1>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                Welcome, {user?.email?.split('@')[0] || user?.email}! 👋
+              </h1>
               <p className="text-gray-600">Track your payments and claims to fix leaks from the taps</p>
             </div>
             <div className="flex items-center gap-3">
