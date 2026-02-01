@@ -60,11 +60,20 @@ export const detectDuplicates = (
       const sub1 = subscriptions[i];
       const sub2 = subscriptions[j];
 
+      // Skip if either is marked as not duplicate
+      if (sub1.markedAsNotDuplicate || sub2.markedAsNotDuplicate) continue;
+
       // Exact name match (case-insensitive, trimmed)
       const name1 = sub1.name.toLowerCase().trim();
       const name2 = sub2.name.toLowerCase().trim();
       
       if (name1 !== name2) continue;
+
+      // Check notes - if notes are different, not a duplicate
+      const notes1 = (sub1.notes || '').toLowerCase().trim();
+      const notes2 = (sub2.notes || '').toLowerCase().trim();
+      
+      if (notes1 !== notes2) continue;
 
       // Exact amount match (converted to same currency)
       const amount1 = getMonthlyValue(sub1, displayCurrency);
@@ -73,7 +82,7 @@ export const detectDuplicates = (
       // Allow tiny floating point difference (< 1 cent)
       if (Math.abs(amount1 - amount2) > 0.01) continue;
 
-      // Both conditions met = duplicate
+      // All conditions met = duplicate
       duplicateIds.add(sub1.id);
       duplicateIds.add(sub2.id);
     }

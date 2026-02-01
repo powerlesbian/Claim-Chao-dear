@@ -28,10 +28,13 @@ export default function SubscriptionList({
 }: SubscriptionListProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [categories, setCategories] = useState<Category[]>([]);
+  const [displayedCount, setDisplayedCount] = useState(100);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+    // Reset pagination when subscriptions change
+    setDisplayedCount(100);
+  }, [subscriptions.length]);
 
   const fetchCategories = async () => {
     try {
@@ -63,6 +66,14 @@ export default function SubscriptionList({
   const activeSubscriptions = filteredSubscriptions.filter(sub => !sub.cancelled);
   const cancelledSubscriptions = filteredSubscriptions.filter(sub => sub.cancelled);
 
+  // Apply pagination
+  const displayedActive = activeSubscriptions.slice(0, displayedCount);
+  const displayedCancelled = cancelledSubscriptions.slice(0, displayedCount - displayedActive.length);
+  
+  const totalDisplayed = displayedActive.length + displayedCancelled.length;
+  const totalAvailable = filteredSubscriptions.length;
+  const hasMore = totalDisplayed < totalAvailable;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
@@ -86,11 +97,11 @@ export default function SubscriptionList({
         )}
       </div>
 
-      {activeSubscriptions.length > 0 && (
+      {displayedActive.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Active Subscriptions</h3>
           <div className="space-y-3">
-            {activeSubscriptions.map(subscription => (
+            {displayedActive.map(subscription => (
               <SubscriptionCard
                 key={subscription.id}
                 subscription={subscription}
@@ -107,11 +118,11 @@ export default function SubscriptionList({
         </div>
       )}
 
-      {cancelledSubscriptions.length > 0 && (
+      {displayedCancelled.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Cancelled Subscriptions</h3>
           <div className="space-y-3">
-            {cancelledSubscriptions.map(subscription => (
+            {displayedCancelled.map(subscription => (
               <SubscriptionCard
                 key={subscription.id}
                 subscription={subscription}
@@ -123,6 +134,28 @@ export default function SubscriptionList({
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className="flex flex-col items-center gap-4 py-8">
+          <p className="text-sm text-gray-600">
+            Showing {totalDisplayed} of {totalAvailable} payments
+          </p>
+          <button
+            onClick={() => setDisplayedCount(prev => prev + 100)}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Load More
+          </button>
+        </div>
+      )}
+
+      {!hasMore && totalAvailable > 0 && (
+        <div className="text-center py-8">
+          <p className="text-sm text-gray-600">
+            Showing all {totalAvailable} payments
+          </p>
         </div>
       )}
     </div>

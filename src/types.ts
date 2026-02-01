@@ -33,6 +33,7 @@ export interface Subscription {
   cancelledDate?: string;
   notes?: string;
   screenshot?: string;
+  markedAsNotDuplicate?: boolean;
   createdAt: string;
 }
 

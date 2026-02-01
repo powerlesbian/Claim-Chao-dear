@@ -7,6 +7,7 @@ import { getUpcomingPayments } from './utils/dates';
 import { getDisplayCurrency, setDisplayCurrency } from './utils/currency';
 import { convertCurrency } from './utils/currency';
 import { calculateTotalMonthly } from './utils/calculations';
+import DuplicateWarning from './components/DuplicateWarning';
 import { detectDuplicates } from './utils/duplicateDetection';
 import { filterSubscriptions, sortSubscriptions } from './utils/filters';
 import { exportToCSV } from './utils/csv';
@@ -257,7 +258,8 @@ const selectedTotal = useMemo(() => {
   const filteredSubscriptions = filterSubscriptions(tagFilteredSubscriptions, searchQuery);
   const sortedSubscriptions = sortSubscriptions(filteredSubscriptions, sortOption, displayCurrency);
   const upcomingPayments = getUpcomingPayments(sortedSubscriptions);
-  const duplicateIds = detectDuplicates(tagFilteredSubscriptions, displayCurrency);
+  //const duplicateIds = detectDuplicates(tagFilteredSubscriptions, displayCurrency);
+  const duplicateIds = new Set<string>(); // Duplicate detection disabled for now
   const totalMonthly = calculateTotalMonthly(tagFilteredSubscriptions, displayCurrency);
 
   // Loading states
@@ -389,13 +391,10 @@ const selectedTotal = useMemo(() => {
 
         {/* Content */}
         <div className="mb-6">
-          {duplicateIds.size > 0 && view === 'all' && (
-            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                <strong>Potential duplicates detected!</strong> {duplicateIds.size} payment(s) highlighted in yellow may be duplicates.
-              </p>
-            </div>
-          )}
+          {/*<DuplicateWarning 
+            duplicateIds={duplicateIds} 
+            visible={duplicateIds.size > 0 && view === 'all'}
+          />*/}
 
           {loading ? (
             <div className="flex items-center justify-center py-12">

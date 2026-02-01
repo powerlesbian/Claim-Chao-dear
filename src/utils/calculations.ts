@@ -21,12 +21,8 @@ export const getMonthlyValue = (
       monthlyAmount = subscription.amount / 12;
       break;
     case 'one-off':
-      const startDate = new Date(subscription.startDate);
-      const today = new Date();
-      const isSameMonth =
-        startDate.getMonth() === today.getMonth() &&
-        startDate.getFullYear() === today.getFullYear();
-      monthlyAmount = isSameMonth ? subscription.amount : 0;
+      // Count one-off subscriptions at their full amount, regardless of month
+      monthlyAmount = subscription.amount;
       break;
     case 'monthly':
     default:

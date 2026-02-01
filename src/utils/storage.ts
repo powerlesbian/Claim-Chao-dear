@@ -51,9 +51,17 @@ const mapSubscriptionToDb = (sub: Omit<Subscription, 'id' | 'createdAt'> & { id?
 });
 
 export const loadSubscriptions = async (): Promise<Subscription[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.error('No authenticated user');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('subscriptions')
     .select('*')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error) {
