@@ -1,18 +1,16 @@
 import { useState, useMemo } from 'react';
-import { Plus, Upload, LogOut, FileUp, Search, Download, Shield, Database, Trash2, ArrowUpDown, Settings, Users } from 'lucide-react';
-import { Subscription, CurrencyType, SortOption, DEFAULT_TAGS } from './types';
-import { getSortPreference, setSortPreference } from './utils/storage';
+import { Plus, Upload, LogOut, FileUp, Shield, Settings, Users } from 'lucide-react';
+import { Subscription, DEFAULT_TAGS } from './types';
 import { formatCurrency } from './utils/dates';
-import { getUpcomingPayments } from './utils/dates';
-import { getDisplayCurrency, setDisplayCurrency } from './utils/currency';
 import { convertCurrency } from './utils/currency';
-import { calculateTotalMonthly } from './utils/calculations';
-import DuplicateWarning from './components/DuplicateWarning';
-import { detectDuplicates } from './utils/duplicateDetection';
-import { filterSubscriptions, sortSubscriptions } from './utils/filters';
 import { exportToCSV } from './utils/csv';
 import { useAuth } from './contexts/AuthContext';
 import { useSubscriptions } from './hooks/useSubscriptions';
+import { useAppState } from './hooks/useAppState';
+import { useSubscriptionActions } from './hooks/useSubscriptionActions';
+import { useTagManagement } from './hooks/useTagManagement';
+import { useSelectionManagement } from './hooks/useSelectionManagement';
+import { useSubscriptionFiltering } from './hooks/useSubscriptionFiltering';
 import Toast from './components/Toast';
 import Auth from './components/Auth';
 import SubscriptionForm from './components/SubscriptionForm';
@@ -28,12 +26,8 @@ import DashboardCards from './components/DashboardCards';
 import TagFilter from './components/TagFilter';
 import FAQ from './components/FAQ';
 import SettingsModal from './components/SettingsModal';
-import { supabase } from './lib/supabase';
-import { useTeam } from './contexts/TeamContext';
 import TeamSettings from './components/TeamSettings';
-
-
-type View = 'upcoming' | 'all' | 'admin';
+import { Database, Trash2, ArrowUpDown, Search, Download } from 'lucide-react';
 
 function App() {
   const { user, isAdmin, loading: authLoading, signOut } = useAuth();
@@ -49,218 +43,124 @@ function App() {
     reload,
     setHasLocalData,
   } = useSubscriptions(user?.id);
-  const { currentTeam, teams } = useTeam();
 
-  // UI State
-  const [view, setView] = useState<View>('upcoming');
-  const [showForm, setShowForm] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showCSVImport, setShowCSVImport] = useState(false);
-  const [showRecovery, setShowRecovery] = useState(false);
-  const [showFAQ, setShowFAQ] = useState(false);
-  const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
-  const [uploadedScreenshot, setUploadedScreenshot] = useState<string | null>(null);
-  const [viewingScreenshot, setViewingScreenshot] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-// Tag filtering state
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [customTags, setCustomTags] = useState<string[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
-//team settings modal
-const [showTeamSettings, setShowTeamSettings] = useState(false);
-const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); 
+  // App state
+  const appState = useAppState();
 
-  // Preferences
-  const [displayCurrency, setDisplayCurrencyState] = useState<CurrencyType>(getDisplayCurrency());
-  const [sortOption, setSortOptionState] = useState<SortOption>(getSortPreference());
-  const [searchQuery, setSearchQuery] = useState('');
+  // Subscription actions
+  const { handleDeleteSelected } = useSubscriptionActions(
+    addOne,
+    update,
+    remove,
+    reload,
+    appState.setToast
+  );
 
-  // Collect all available tags from subscriptions + defaults + custom
+  // Tag management
+  const { handleAddTag, handleTagDelete, handleTagRename } = useTagManagement(
+    subscriptions,
+    appState.customTags,
+    appState.setCustomTags,
+    appState.selectedTags,
+    appState.setSelectedTags,
+    reload,
+    appState.setToast
+  );
+
+  // Selection management
+  const { handleToggleSelect, handleSelectAll, selectedTotal } = useSelectionManagement(
+    subscriptions,
+    appState.selectedIds,
+    appState.setSelectedIds,
+    appState.displayCurrency
+  );
+
+  // Subscription filtering
+  const {
+    tagFilteredSubscriptions,
+    activeSubscriptions,
+    sortedSubscriptions,
+    upcomingPayments,
+    totalMonthly,
+  } = useSubscriptionFiltering(
+    subscriptions,
+    appState.selectedTags,
+    appState.searchQuery,
+    appState.sortOption,
+    appState.displayCurrency
+  );
+
+  // Available tags
   const availableTags = useMemo(() => {
     const tagsSet = new Set<string>(DEFAULT_TAGS);
     subscriptions.forEach((sub) => {
       sub.tags?.forEach((tag) => tagsSet.add(tag));
     });
-    customTags.forEach((tag) => tagsSet.add(tag));
+    appState.customTags.forEach((tag) => tagsSet.add(tag));
     return Array.from(tagsSet).sort();
-  }, [subscriptions, customTags]);
+  }, [subscriptions, appState.customTags]);
 
   // Handlers
-  // Add toggle handler
-  const handleToggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-  const handleSelectAll = () => {
-    if (selectedIds.size === sortedSubscriptions.length) {
-      // If all are selected, deselect all
-      setSelectedIds(new Set());
-    } else {
-      // Select all visible subscriptions
-      setSelectedIds(new Set(sortedSubscriptions.map(s => s.id)));
-    }
-  };
-
-  const handleDeleteSelected = async () => {
-    const idsArray = Array.from(selectedIds);
-    
-    for (const id of idsArray) {
-      await remove(id);
-    }
-    
-    setSelectedIds(new Set());
-    setShowDeleteConfirm(false);
-    setToast(`Deleted ${idsArray.length} payment${idsArray.length > 1 ? 's' : ''}`);
-  };
-
-  const handleCurrencyChange = (currency: CurrencyType) => {
-    setDisplayCurrencyState(currency);
-    setDisplayCurrency(currency);
-  };
-  const handleAddTag = (tag: string) => {
-    if (!customTags.includes(tag)) {
-      setCustomTags([...customTags, tag]);
-    }
-  };
-const handleTagDelete = async (tag: string) => {
-  // Remove from custom tags
-  setCustomTags(customTags.filter(t => t !== tag));
-  
-  // Remove from selected tags
-  setSelectedTags(selectedTags.filter(t => t !== tag));
-  
-  // Find all subscriptions with this tag and update them
-  const subsWithTag = subscriptions.filter(s => s.tags?.includes(tag));
-  
-  for (const sub of subsWithTag) {
-    const newTags = sub.tags?.filter(t => t !== tag) || [];
-    // Ensure at least one tag remains
-    const finalTags = newTags.length > 0 ? newTags : ['Personal'];
-    
-    await supabase
-      .from('subscriptions')
-      .update({ tags: finalTags })
-      .eq('id', sub.id);
-  }
-  
-  // Refresh subscriptions without page reload
-  await reload();
-};
-
-const handleTagRename = async (oldTag: string, newTag: string) => {
-  // Update custom tags
-  setCustomTags(customTags.map(t => t === oldTag ? newTag : t));
-  
-  // Update selected tags
-  setSelectedTags(selectedTags.map(t => t === oldTag ? newTag : t));
-  
-  // Find all subscriptions with this tag and update them
-  const subsWithTag = subscriptions.filter(s => s.tags?.includes(oldTag));
-  
-  for (const sub of subsWithTag) {
-    const newTags = sub.tags?.map(t => t === oldTag ? newTag : t) || [newTag];
-    
-    await supabase
-      .from('subscriptions')
-      .update({ tags: newTags })
-      .eq('id', sub.id);
-  }
-  // Refresh subscriptions without page reload
-  await reload();
-};
-
-  const handleSortChange = (sort: SortOption) => {
-    setSortOptionState(sort);
-    setSortPreference(sort);
-  };
-
-  const handleAddSubscription = async (data: Omit<Subscription, 'id' | 'createdAt'>) => {
-    const subscriptionData = {
-      ...data,
-      screenshot: uploadedScreenshot || data.screenshot,
-    };
-    const result = await addOne(subscriptionData);
-    if (result) {
-      setShowForm(false);
-      setEditingSubscription(null);
-      setUploadedScreenshot(null);
-    }
-  };
-
-  const handleUpdateSubscription = async (data: Omit<Subscription, 'id' | 'createdAt'>) => {
-    if (!editingSubscription) return;
-    const updatedData = {
-      ...data,
-      screenshot: uploadedScreenshot || data.screenshot,
-    };
-    const success = await update(editingSubscription.id, updatedData);
-    if (success) {
-      setShowForm(false);
-      setEditingSubscription(null);
-      setUploadedScreenshot(null);
-    }
-  };
-
   const handleEdit = (subscription: Subscription) => {
-    setEditingSubscription(subscription);
-    setShowForm(true);
+    appState.setEditingSubscription(subscription);
+    appState.setShowForm(true);
   };
 
   const handleUploadComplete = (screenshot: string) => {
-    setUploadedScreenshot(screenshot);
-    setShowUpload(false);
-    setShowForm(true);
+    appState.setUploadedScreenshot(screenshot);
+    appState.setShowUpload(false);
+    appState.setShowForm(true);
   };
 
   const handleCSVImport = async (imported: Omit<Subscription, 'id' | 'createdAt'>[]) => {
     const result = await addMany(imported);
     if (result.length > 0) {
-      setShowCSVImport(false);
-      setToast(`Imported ${result.length} transaction${result.length > 1 ? 's' : ''}! View in "All Payments" tab.`);
+      appState.setShowCSVImport(false);
+      appState.setToast(`Imported ${result.length} transaction${result.length > 1 ? 's' : ''}! View in "All Payments" tab.`);
     }
   };
 
   const handleRecovery = async (recovered: Omit<Subscription, 'id' | 'createdAt'>[]) => {
     const result = await addMany(recovered);
     if (result.length > 0) {
-      setShowRecovery(false);
+      appState.setShowRecovery(false);
       setHasLocalData(false);
     }
   };
 
-  // Filter subscriptions by selected tags
-  // Calculate selected total (add near other useMemo calculations)
-const selectedTotal = useMemo(() => {
-  return subscriptions
-    .filter(s => selectedIds.has(s.id))
-    .reduce((sum, s) => sum + convertCurrency(s.amount, s.currency, displayCurrency), 0);
-}, [subscriptions, selectedIds, displayCurrency]);
-  const tagFilteredSubscriptions = useMemo(() => {
-    if (selectedTags.length === 0) {
-      return subscriptions; // No filter = show all
+  const handleAddSubscription = async (data: Omit<Subscription, 'id' | 'createdAt'>) => {
+    const subscriptionData = {
+      ...data,
+      screenshot: appState.uploadedScreenshot || data.screenshot,
+    };
+    const result = await addOne(subscriptionData);
+    if (result) {
+      appState.setShowForm(false);
+      appState.setEditingSubscription(null);
+      appState.setUploadedScreenshot(null);
     }
-    return subscriptions.filter((sub) => {
-      const subTags = sub.tags || ['Personal'];
-      return subTags.some((tag) => selectedTags.includes(tag));
-    });
-  }, [subscriptions, selectedTags]);
+  };
 
-  // Computed values (now based on tag-filtered subscriptions)
-  const activeSubscriptions = tagFilteredSubscriptions.filter((sub) => !sub.cancelled);
-  const filteredSubscriptions = filterSubscriptions(tagFilteredSubscriptions, searchQuery);
-  const sortedSubscriptions = sortSubscriptions(filteredSubscriptions, sortOption, displayCurrency);
-  const upcomingPayments = getUpcomingPayments(sortedSubscriptions);
-  //const duplicateIds = detectDuplicates(tagFilteredSubscriptions, displayCurrency);
-  const duplicateIds = new Set<string>(); // Duplicate detection disabled for now
-  const totalMonthly = calculateTotalMonthly(tagFilteredSubscriptions, displayCurrency);
+  const handleUpdateSubscription = async (data: Omit<Subscription, 'id' | 'createdAt'>) => {
+    if (!appState.editingSubscription) return;
+    const updatedData = {
+      ...data,
+      screenshot: appState.uploadedScreenshot || data.screenshot,
+    };
+    const success = await update(appState.editingSubscription.id, updatedData);
+    if (success) {
+      appState.setShowForm(false);
+      appState.setEditingSubscription(null);
+      appState.setUploadedScreenshot(null);
+    }
+  };
+
+  const handleDeleteSelectedClick = async () => {
+    await handleDeleteSelected(appState.selectedIds, () => {
+      appState.setSelectedIds(new Set());
+      appState.setShowDeleteConfirm(false);
+    });
+  };
 
   // Loading states
   if (authLoading) {
@@ -275,13 +175,14 @@ const selectedTotal = useMemo(() => {
     return <Auth />;
   }
 
-  if (view === 'admin' && isAdmin) {
+  // Admin view
+  if (appState.view === 'admin' && isAdmin) {
     return (
       <div>
         <div className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <button
-              onClick={() => setView('upcoming')}
+              onClick={() => appState.setView('upcoming')}
               className="text-sm text-gray-600 hover:text-gray-900"
             >
               ← Back to App
@@ -299,6 +200,7 @@ const selectedTotal = useMemo(() => {
     );
   }
 
+  // Main app view
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
       <div className="max-w-4xl mx-auto px-4 py-6 pb-24 md:py-8">
@@ -311,48 +213,24 @@ const selectedTotal = useMemo(() => {
               </h1>
               <p className="text-gray-600">Track your payments and claims to fix leaks from the taps</p>
             </div>
-            <div className="flex items-center gap-3">
-              <CurrencySelect value={displayCurrency} onChange={handleCurrencyChange} />
-              {isAdmin && (
-                <button
-                  onClick={() => setView('admin')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  title="Admin Panel"
-                >
-                  <Shield size={18} />
-                </button>
-              )}
-              <button
-                onClick={() => setShowSettings(true)}
-                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Settings"
-              >
-                <Settings size={18} />
-              </button>
-              <button
-                onClick={() => signOut()}
-                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Sign out"
-              >
-                <LogOut size={18} />
-              </button>
-              <button
-                onClick={() => setShowTeamSettings(true)}
-                className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Team Settings"
-              >
-                <Users size={18} />
-                <span className="hidden sm:inline text-sm">{currentTeam?.name || 'Personal'}</span>
-              </button>
-            </div>
+            <HeaderActions
+              displayCurrency={appState.displayCurrency}
+              onCurrencyChange={appState.handleCurrencyChange}
+              isAdmin={isAdmin}
+              onAdminClick={() => appState.setView('admin')}
+              onSettingsClick={() => appState.setShowSettings(true)}
+              onTeamSettingsClick={() => appState.setShowTeamSettings(true)}
+              onSignOut={signOut}
+              currentTeamName="Personal" // TODO: Get from context
+            />
           </div>
         </header>
 
         {/* Tag Filter */}
         <TagFilter
           availableTags={availableTags}
-          selectedTags={selectedTags}
-          onTagsChange={setSelectedTags}
+          selectedTags={appState.selectedTags}
+          onTagsChange={appState.setSelectedTags}
           onAddTag={handleAddTag}
         />
 
@@ -361,200 +239,213 @@ const selectedTotal = useMemo(() => {
           totalMonthly={totalMonthly}
           activeCount={activeSubscriptions.length}
           dueThisWeek={upcomingPayments.filter((p) => p.daysUntil <= 7).length}
-          displayCurrency={displayCurrency}
+          displayCurrency={appState.displayCurrency}
         />
 
         {/* Dashboard Cards */}
         <DashboardCards
           subscriptions={tagFilteredSubscriptions}
-          displayCurrency={displayCurrency}
+          displayCurrency={appState.displayCurrency}
         />
 
         {/* Local Data Recovery Banner */}
         {hasLocalData && (
-          <LocalDataBanner onRecover={() => setShowRecovery(true)} />
+          <LocalDataBanner onRecover={() => appState.setShowRecovery(true)} />
         )}
 
         {/* View Tabs & Sort */}
         <ViewControls
-          view={view}
-          setView={setView}
-          sortOption={sortOption}
-          onSortChange={handleSortChange}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          view={appState.view}
+          onViewChange={appState.setView}
+          sortOption={appState.sortOption}
+          onSortChange={appState.handleSortChange}
+          searchQuery={appState.searchQuery}
+          onSearchChange={appState.setSearchQuery}
           onExport={() => exportToCSV(subscriptions)}
-          selectedCount={selectedIds.size}
+          selectedCount={appState.selectedIds.size}
           totalCount={sortedSubscriptions.length}
           onSelectAll={handleSelectAll}
         />
 
         {/* Content */}
         <div className="mb-6">
-          {/*<DuplicateWarning 
-            duplicateIds={duplicateIds} 
-            visible={duplicateIds.size > 0 && view === 'all'}
-          />*/}
-
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-600">Loading payments...</div>
             </div>
-          ) : view === 'upcoming' ? (
+          ) : appState.view === 'upcoming' ? (
             <UpcomingPayments payments={upcomingPayments} />
           ) : (
             <SubscriptionList
               subscriptions={sortedSubscriptions}
-              duplicateIds={duplicateIds}
-              selectedIds={selectedIds}
+              duplicateIds={new Set()}
+              selectedIds={appState.selectedIds}
               onToggleSelect={handleToggleSelect}
               onEdit={handleEdit}
               onDelete={remove}
               onToggleCancelled={toggleCancelled}
-              onViewScreenshot={setViewingScreenshot}
+              onViewScreenshot={appState.setViewingScreenshot}
             />
           )}
         </div>
 
         {/* Action Buttons */}
         <ActionBar
-          onUpload={() => setShowUpload(true)}
-          onCSVImport={() => setShowCSVImport(true)}
+          onUpload={() => appState.setShowUpload(true)}
+          onCSVImport={() => appState.setShowCSVImport(true)}
           onAdd={() => {
-            setEditingSubscription(null);
-            setUploadedScreenshot(null);
-            setShowForm(true);
+            appState.setEditingSubscription(null);
+            appState.setUploadedScreenshot(null);
+            appState.setShowForm(true);
           }}
         />
 
         {/* FAQ */}
-        <FAQ isVisible={showFAQ} onToggle={() => setShowFAQ(!showFAQ)} />
+        <FAQ isVisible={appState.showFAQ} onToggle={() => appState.setShowFAQ(!appState.showFAQ)} />
       </div>
 
       {/* Modals */}
-      {showSettings && (
+      {appState.showSettings && (
         <SettingsModal
-          onClose={() => setShowSettings(false)}
+          onClose={() => appState.setShowSettings(false)}
           availableTags={availableTags}
           onTagDelete={handleTagDelete}
           onTagRename={handleTagRename}
           onTagAdd={handleAddTag}
         />
       )}
-      {showForm && (
+
+      {appState.showForm && (
         <SubscriptionForm
-          onSubmit={editingSubscription ? handleUpdateSubscription : handleAddSubscription}
+          onSubmit={appState.editingSubscription ? handleUpdateSubscription : handleAddSubscription}
           onCancel={() => {
-            setShowForm(false);
-            setEditingSubscription(null);
-            setUploadedScreenshot(null);
+            appState.setShowForm(false);
+            appState.setEditingSubscription(null);
+            appState.setUploadedScreenshot(null);
           }}
-          initialData={editingSubscription || undefined}
+          initialData={appState.editingSubscription || undefined}
           availableTags={availableTags}
         />
       )}
-      {showTeamSettings && (
-        <TeamSettings onClose={() => setShowTeamSettings(false)} />
+
+      {appState.showTeamSettings && (
+        <TeamSettings onClose={() => appState.setShowTeamSettings(false)} />
       )}
-      {showUpload && (
+
+      {appState.showUpload && (
         <UploadStatement
           onUpload={handleUploadComplete}
-          onCancel={() => setShowUpload(false)}
+          onCancel={() => appState.setShowUpload(false)}
           onImportSubscriptions={handleCSVImport}
         />
       )}
 
-      {viewingScreenshot && (
+      {appState.viewingScreenshot && (
         <ScreenshotModal
-          screenshot={viewingScreenshot}
-          onClose={() => setViewingScreenshot(null)}
+          screenshot={appState.viewingScreenshot}
+          onClose={() => appState.setViewingScreenshot(null)}
         />
       )}
 
-      {showCSVImport && (
-        <CSVImport onImport={handleCSVImport} onCancel={() => setShowCSVImport(false)} />
+      {appState.showCSVImport && (
+        <CSVImport onImport={handleCSVImport} onCancel={() => appState.setShowCSVImport(false)} />
       )}
 
-      {showRecovery && (
-        <LocalStorageRecovery onRecover={handleRecovery} onCancel={() => setShowRecovery(false)} />
+      {appState.showRecovery && (
+        <LocalStorageRecovery onRecover={handleRecovery} onCancel={() => appState.setShowRecovery(false)} />
       )}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 z-50">
-          <span className="font-medium">{selectedIds.size} selected</span>
-          <span className="text-xl font-bold">{formatCurrency(selectedTotal, displayCurrency)}</span>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
-          >
-            Clear
-          </button>
-        </div>
-      )}
-              {/* Selection Summary Bar */}
-        {selectedIds.size > 0 && (
-          <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 z-50">
-            <span className="font-medium">{selectedIds.size} selected</span>
-            <span className="text-xl font-bold">{formatCurrency(selectedTotal, displayCurrency)}</span>
-            <button
-              onClick={handleSelectAll}
-              className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
-            >
-              {selectedIds.size === sortedSubscriptions.length ? 'Deselect All' : 'Select All'}
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="ml-2 px-3 py-1 bg-red-500 rounded-full hover:bg-red-600 text-sm flex items-center gap-2"
-            >
-              <Trash2 size={16} />
-              Delete
-            </button>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
-            >
-              Clear
-            </button>
-          </div>
-        )}
 
-        {/* Delete Confirmation Modal */}
-        {showDeleteConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Selected Payments?</h2>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to permanently delete {selectedIds.size} payment{selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteSelected}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                >
-                  Delete {selectedIds.size}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+      {/* Selection Bar */}
+      {appState.selectedIds.size > 0 && (
+        <SelectionBar
+          selectedCount={appState.selectedIds.size}
+          selectedTotal={selectedTotal}
+          displayCurrency={appState.displayCurrency}
+          totalCount={sortedSubscriptions.length}
+          onSelectAll={handleSelectAll}
+          onDelete={() => appState.setShowDeleteConfirm(true)}
+          onClear={() => appState.setSelectedIds(new Set())}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {appState.showDeleteConfirm && (
+        <DeleteConfirmationModal
+          count={appState.selectedIds.size}
+          onConfirm={handleDeleteSelectedClick}
+          onCancel={() => appState.setShowDeleteConfirm(false)}
+        />
+      )}
+
+      {appState.toast && <Toast message={appState.toast} onClose={() => appState.setToast(null)} />}
     </div>
   );
 }
 
-// Small inline components to keep App.tsx clean
+// Sub-components
+function HeaderActions({
+  displayCurrency,
+  onCurrencyChange,
+  isAdmin,
+  onAdminClick,
+  onSettingsClick,
+  onTeamSettingsClick,
+  onSignOut,
+  currentTeamName,
+}: {
+  displayCurrency: any;
+  onCurrencyChange: (currency: any) => void;
+  isAdmin: boolean;
+  onAdminClick: () => void;
+  onSettingsClick: () => void;
+  onTeamSettingsClick: () => void;
+  onSignOut: () => void;
+  currentTeamName: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <CurrencySelect value={displayCurrency} onChange={onCurrencyChange} />
+      {isAdmin && (
+        <button
+          onClick={onAdminClick}
+          className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          title="Admin Panel"
+        >
+          <Shield size={18} />
+        </button>
+      )}
+      <button
+        onClick={onSettingsClick}
+        className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        title="Settings"
+      >
+        <Settings size={18} />
+      </button>
+      <button
+        onClick={onSignOut}
+        className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        title="Sign out"
+      >
+        <LogOut size={18} />
+      </button>
+      <button
+        onClick={onTeamSettingsClick}
+        className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        title="Team Settings"
+      >
+        <Users size={18} />
+        <span className="hidden sm:inline text-sm">{currentTeamName}</span>
+      </button>
+    </div>
+  );
+}
 
 function CurrencySelect({
   value,
   onChange,
 }: {
-  value: CurrencyType;
-  onChange: (currency: CurrencyType) => void;
+  value: any;
+  onChange: (currency: any) => void;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -564,7 +455,7 @@ function CurrencySelect({
       <select
         id="displayCurrency"
         value={value}
-        onChange={(e) => onChange(e.target.value as CurrencyType)}
+        onChange={(e) => onChange(e.target.value)}
         className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
       >
         <option value="HKD">HKD</option>
@@ -576,6 +467,7 @@ function CurrencySelect({
 }
 
 function LocalDataBanner({ onRecover }: { onRecover: () => void }) {
+
   return (
     <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
       <div className="flex items-start justify-between gap-4">
@@ -601,7 +493,7 @@ function LocalDataBanner({ onRecover }: { onRecover: () => void }) {
 
 function ViewControls({
   view,
-  setView,
+  onViewChange,
   sortOption,
   onSortChange,
   searchQuery,
@@ -611,10 +503,10 @@ function ViewControls({
   totalCount,
   onSelectAll,
 }: {
-  view: View;
-  setView: (view: View) => void;
-  sortOption: SortOption;
-  onSortChange: (sort: SortOption) => void;
+  view: string;
+  onViewChange: (view: string) => void;
+  sortOption: any;
+  onSortChange: (sort: any) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onExport: () => void;
@@ -627,7 +519,7 @@ function ViewControls({
       <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
         <div className="flex gap-2 border-b border-gray-200">
           <button
-            onClick={() => setView('upcoming')}
+            onClick={() => onViewChange('upcoming')}
             className={`px-4 py-2 font-medium transition-colors ${
               view === 'upcoming'
                 ? 'text-blue-600 border-b-2 border-blue-600'
@@ -637,7 +529,7 @@ function ViewControls({
             Upcoming Payments
           </button>
           <button
-            onClick={() => setView('all')}
+            onClick={() => onViewChange('all')}
             className={`px-4 py-2 font-medium transition-colors ${
               view === 'all'
                 ? 'text-blue-600 border-b-2 border-blue-600'
@@ -656,7 +548,7 @@ function ViewControls({
           <select
             id="sortOption"
             value={sortOption}
-            onChange={(e) => onSortChange(e.target.value as SortOption)}
+            onChange={(e) => onSortChange(e.target.value)}
             className="px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
           >
             <option value="recent">Recently Added</option>
@@ -679,8 +571,7 @@ function ViewControls({
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          
-          {/* Select All Button */}
+
           {totalCount > 0 && (
             <button
               onClick={onSelectAll}
@@ -693,7 +584,7 @@ function ViewControls({
               {selectedCount === totalCount ? '✓ All Selected' : `Select All (${totalCount})`}
             </button>
           )}
-          
+
           <button
             onClick={onExport}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
@@ -707,6 +598,86 @@ function ViewControls({
   );
 }
 
+
+function SelectionBar({
+  selectedCount,
+  selectedTotal,
+  displayCurrency,
+  totalCount,
+  onSelectAll,
+  onDelete,
+  onClear,
+}: {
+  selectedCount: number;
+  selectedTotal: number;
+  displayCurrency: any;
+  totalCount: number;
+  onSelectAll: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+
+  return (
+    <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 z-50">
+      <span className="font-medium">{selectedCount} selected</span>
+      <span className="text-xl font-bold">{formatCurrency(selectedTotal, displayCurrency)}</span>
+      <button
+        onClick={onSelectAll}
+        className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
+      >
+        {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
+      </button>
+      <button
+        onClick={onDelete}
+        className="ml-2 px-3 py-1 bg-red-500 rounded-full hover:bg-red-600 text-sm flex items-center gap-2"
+      >
+        <Trash2 size={16} />
+        Delete
+      </button>
+      <button
+        onClick={onClear}
+        className="ml-2 px-3 py-1 bg-white/20 rounded-full hover:bg-white/30 text-sm"
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
+function DeleteConfirmationModal({
+  count,
+  onConfirm,
+  onCancel,
+}: {
+  count: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Selected Payments?</h2>
+        <p className="text-gray-600 mb-6">
+          Are you sure you want to permanently delete {count} payment{count !== 1 ? 's' : ''}? This action cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+          >
+            Delete {count}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ActionBar({
   onUpload,

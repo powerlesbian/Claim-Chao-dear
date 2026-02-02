@@ -4,72 +4,105 @@ import { supabase } from '../lib/supabase';
 import { Subscription } from '../types';
 import { formatCurrency } from '../utils/dates';
 
-interface ClaimStats {
-  totalSubscriptions: number;
+interface ExpenseStats {
+  totalExpenses: number;
   totalUsers: number;
-  totalMonthlyValue: number;
+  totalMonthlyExpenditure: number;
+  newExpensesLast30Days: number;
   byCategory: { category: string; count: number; totalAmount: number }[];
   byCurrency: { currency: string; count: number; totalAmount: number }[];
 }
 
+const DISPLAY_CURRENCY = 'HKD';
+
 export default function ClaimsDashboard() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [stats, setStats] = useState<ClaimStats | null>(null);
+  const [expenses, setExpenses] = useState<Subscription[]>([]);
+  const [stats, setStats] = useState<ExpenseStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAllSubscriptions();
+    fetchAllData();
   }, []);
 
-  const fetchAllSubscriptions = async () => {
+  const fetchAllData = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch all expenses
+      const { data: expenseData, error: expenseError } = await supabase
         .from('subscriptions')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (expenseError) throw expenseError;
 
-      setSubscriptions(data || []);
-      calculateStats(data || []);
+      // Count non-admin users from user_roles
+      const { data: userRolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .neq('role', 'admin');
+
+      if (rolesError) throw rolesError;
+
+      const totalUsers = userRolesData?.length || 0;
+
+      setExpenses(expenseData || []);
+      calculateStats(expenseData || [], totalUsers);
     } catch (err) {
-      console.error('Error fetching subscriptions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch subscriptions');
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateStats = (subs: Subscription[]) => {
-    const uniqueUsers = new Set(subs.map(sub => sub.user_id)).size;
-    const activeSubs = subs.filter(sub => !sub.cancelled);
+  const calculateStats = (expenses: Subscription[], totalUsers: number) => {
+    // Calculate new expenses in last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const newExpensesLast30Days = expenses.filter(
+      (exp) => new Date(exp.created_at) > thirtyDaysAgo && !exp.cancelled
+    ).length;
 
     const byCategory: { [key: string]: { count: number; totalAmount: number } } = {};
     const byCurrency: { [key: string]: { count: number; totalAmount: number } } = {};
-    let totalMonthlyValue = 0;
+    let totalMonthlyExpenditure = 0;
 
-    activeSubs.forEach(sub => {
-      const monthlyAmount = getMonthlyAmount(sub.amount, sub.frequency);
-      totalMonthlyValue += monthlyAmount;
+    // Only count non-cancelled expenses
+    const activeExpenses = expenses.filter((exp) => !exp.cancelled);
 
-      if (!byCategory[sub.category]) {
-        byCategory[sub.category] = { count: 0, totalAmount: 0 };
+    // First, collect ALL unique categories (even if they have 0 active expenses)
+    const allCategories = new Set<string>();
+    expenses.forEach((exp) => {
+      const category = exp.category || 'Uncategorized';
+      allCategories.add(category);
+    });
+
+    // Initialize all categories with 0 values
+    allCategories.forEach((category) => {
+      byCategory[category] = { count: 0, totalAmount: 0 };
+    });
+
+    // Then populate with active expenses only
+    activeExpenses.forEach((exp) => {
+      const monthlyAmount = getMonthlyAmount(exp.amount, exp.frequency);
+      totalMonthlyExpenditure += monthlyAmount;
+
+      const category = exp.category || 'Uncategorized';
+      byCategory[category].count++;
+      byCategory[category].totalAmount += monthlyAmount;
+
+      if (!byCurrency[exp.currency]) {
+        byCurrency[exp.currency] = { count: 0, totalAmount: 0 };
       }
-      byCategory[sub.category].count++;
-      byCategory[sub.category].totalAmount += monthlyAmount;
-
-      if (!byCurrency[sub.currency]) {
-        byCurrency[sub.currency] = { count: 0, totalAmount: 0 };
-      }
-      byCurrency[sub.currency].count++;
-      byCurrency[sub.currency].totalAmount += monthlyAmount;
+      byCurrency[exp.currency].count++;
+      byCurrency[exp.currency].totalAmount += monthlyAmount;
     });
 
     setStats({
-      totalSubscriptions: subs.length,
-      totalUsers: uniqueUsers,
-      totalMonthlyValue,
+      totalExpenses: activeExpenses.length,
+      totalUsers,
+      totalMonthlyExpenditure,
+      newExpensesLast30Days,
       byCategory: Object.entries(byCategory)
         .map(([category, data]) => ({ category, ...data }))
         .sort((a, b) => b.totalAmount - a.totalAmount),
@@ -80,24 +113,42 @@ export default function ClaimsDashboard() {
   };
 
   const getMonthlyAmount = (amount: number, frequency: string): number => {
-    switch (frequency) {
+    switch (frequency?.toLowerCase()) {
       case 'daily':
         return amount * 30;
       case 'weekly':
-        return amount * 4;
+        return amount * 4.33;
       case 'monthly':
         return amount;
       case 'yearly':
         return amount / 12;
+      case 'one-off':
+        return 0;
       default:
         return 0;
     }
   };
 
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <p className="text-gray-600">Loading claims dashboard...</p>
+      <div className="flex items-center justify-center p-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -105,7 +156,7 @@ export default function ClaimsDashboard() {
   if (error) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <p className="text-red-600">{error}</p>
+        <p className="text-red-600">Error: {error}</p>
       </div>
     );
   }
@@ -115,7 +166,7 @@ export default function ClaimsDashboard() {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <div className="flex items-center gap-2 mb-6">
           <BarChart3 className="text-blue-600" size={24} />
-          <h2 className="text-2xl font-bold text-gray-900">Claims Dashboard</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Expense Dashboard</h2>
         </div>
 
         {stats && (
@@ -124,9 +175,9 @@ export default function ClaimsDashboard() {
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart3 className="text-blue-600" size={20} />
-                  <span className="text-sm font-medium text-blue-900">Total Claims</span>
+                  <span className="text-sm font-medium text-blue-900">Active Expenses</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-900">{stats.totalSubscriptions}</p>
+                <p className="text-2xl font-bold text-blue-900">{stats.totalExpenses}</p>
               </div>
 
               <div className="bg-green-50 rounded-lg p-4">
@@ -140,20 +191,20 @@ export default function ClaimsDashboard() {
               <div className="bg-purple-50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign className="text-purple-600" size={20} />
-                  <span className="text-sm font-medium text-purple-900">Monthly Value</span>
+                  <span className="text-sm font-medium text-purple-900">Monthly Expenditure</span>
                 </div>
                 <p className="text-2xl font-bold text-purple-900">
-                  {formatCurrency(stats.totalMonthlyValue, 'USD')}
+                  {formatCurrency(stats.totalMonthlyExpenditure, DISPLAY_CURRENCY)}
                 </p>
               </div>
 
               <div className="bg-orange-50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp className="text-orange-600" size={20} />
-                  <span className="text-sm font-medium text-orange-900">Active Claims</span>
+                  <span className="text-sm font-medium text-orange-900">New (30 days)</span>
                 </div>
                 <p className="text-2xl font-bold text-orange-900">
-                  {subscriptions.filter(s => !s.cancelled).length}
+                  {stats.newExpensesLast30Days}
                 </p>
               </div>
             </div>
@@ -162,40 +213,48 @@ export default function ClaimsDashboard() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">By Category</h3>
                 <div className="space-y-2">
-                  {stats.byCategory.map((item) => (
-                    <div
-                      key={item.category}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{item.category}</p>
-                        <p className="text-sm text-gray-600">{item.count} claims</p>
+                  {stats.byCategory.length > 0 ? (
+                    stats.byCategory.map((item) => (
+                      <div
+                        key={item.category}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-900">{item.category}</p>
+                          <p className="text-sm text-gray-600">{item.count} expense{item.count !== 1 ? 's' : ''}</p>
+                        </div>
+                        <p className="font-bold text-gray-900">
+                          {formatCurrency(item.totalAmount, DISPLAY_CURRENCY)}/mo
+                        </p>
                       </div>
-                      <p className="font-bold text-gray-900">
-                        {formatCurrency(item.totalAmount, 'USD')}/mo
-                      </p>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">No expenses yet</p>
+                  )}
                 </div>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">By Currency</h3>
                 <div className="space-y-2">
-                  {stats.byCurrency.map((item) => (
-                    <div
-                      key={item.currency}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{item.currency}</p>
-                        <p className="text-sm text-gray-600">{item.count} claims</p>
+                  {stats.byCurrency.length > 0 ? (
+                    stats.byCurrency.map((item) => (
+                      <div
+                        key={item.currency}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-900">{item.currency}</p>
+                          <p className="text-sm text-gray-600">{item.count} expense{item.count !== 1 ? 's' : ''}</p>
+                        </div>
+                        <p className="font-bold text-gray-900">
+                          {formatCurrency(item.totalAmount, item.currency as any)}/mo
+                        </p>
                       </div>
-                      <p className="font-bold text-gray-900">
-                        {formatCurrency(item.totalAmount, item.currency as any)}/mo
-                      </p>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">No expenses yet</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -205,7 +264,7 @@ export default function ClaimsDashboard() {
 
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Recent Claims ({subscriptions.length})
+          Recent Expenses ({expenses.filter((e) => !e.cancelled).length})
         </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -215,39 +274,30 @@ export default function ClaimsDashboard() {
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Category</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Amount</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-700">Frequency</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-gray-700">Created</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-700">Date Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {subscriptions.slice(0, 50).map((sub) => (
-                <tr key={sub.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{sub.name}</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                      {sub.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {formatCurrency(sub.amount, sub.currency)}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 capitalize">{sub.frequency}</td>
-                  <td className="px-4 py-3">
-                    {sub.cancelled ? (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                        Cancelled
+              {expenses
+                .filter((e) => !e.cancelled)
+                .slice(0, 50)
+                .map((expense) => (
+                  <tr key={expense.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">{expense.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        {expense.category || 'Uncategorized'}
                       </span>
-                    ) : (
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        Active
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {new Date(sub.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3 text-gray-900">
+                      {formatCurrency(expense.amount, expense.currency)}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 capitalize">{expense.frequency}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {formatDate(expense.created_at)}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
