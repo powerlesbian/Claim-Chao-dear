@@ -1,7 +1,7 @@
 {
-  "name": "Claim Chao-dear",
-  "short_name": "Chao-dear",
-  "description": "Track your subscriptions and claims to fix leaks from the taps",
+  "name": "Claim Chowderr",
+  "short_name": "Claim Chow",
+  "description": "Track your payments and claims to fix leaks from the taps",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -9,13 +9,13 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/chowder-favicon/web-app-manifest-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/chowder-favicon/web-app-manifest-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

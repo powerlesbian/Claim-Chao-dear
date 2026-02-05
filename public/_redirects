@@ -1,1 +1,5 @@
+# Redirect www to non-www (or vice versa - pick one)
+https://www.chnx.app/* https://chnx.app/:splat 301
+
+# SPA fallback
 /*    /index.html   200
