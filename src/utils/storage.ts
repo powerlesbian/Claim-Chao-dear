@@ -11,6 +11,7 @@ interface DbSubscription {
   currency: string;
   start_date: string;
   frequency: string;
+  category: string | null;  // ADDED
   cancelled: boolean;
   cancelled_date: string | null;
   notes: string | null;
@@ -28,8 +29,8 @@ const mapDbToSubscription = (db: DbSubscription): Subscription => ({
   currency: db.currency as CurrencyType,
   startDate: db.start_date,
   frequency: db.frequency as FrequencyType,
-  category: '', // You may need to handle this
-  tags: db.tags || ['Personal'],  // NEW
+  category: db.category || 'Other',  // FIXED: defaults to 'Other' if null
+  tags: db.tags || ['Personal'],
   cancelled: db.cancelled,
   cancelledDate: db.cancelled_date || undefined,
   notes: db.notes || undefined,
@@ -43,11 +44,12 @@ const mapSubscriptionToDb = (sub: Omit<Subscription, 'id' | 'createdAt'> & { id?
   currency: sub.currency,
   start_date: sub.startDate,
   frequency: sub.frequency,
+  category: sub.category || 'Other',  // ADDED
   cancelled: sub.cancelled,
   cancelled_date: sub.cancelledDate || null,
   notes: sub.notes || null,
   screenshot: sub.screenshot || null,
-  tags: sub.tags || ['Personal'],  // NEW
+  tags: sub.tags || ['Personal'],
 });
 
 export const loadSubscriptions = async (): Promise<Subscription[]> => {
@@ -98,9 +100,23 @@ export const addSubscription = async (subscription: Omit<Subscription, 'id' | 'c
 };
 
 export const updateSubscription = async (id: string, updates: Partial<Omit<Subscription, 'id' | 'createdAt'>>): Promise<boolean> => {
+  const dbUpdates: Record<string, unknown> = {};
+  
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+  if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
+  if (updates.startDate !== undefined) dbUpdates.start_date = updates.startDate;
+  if (updates.frequency !== undefined) dbUpdates.frequency = updates.frequency;
+  if (updates.category !== undefined) dbUpdates.category = updates.category;
+  if (updates.cancelled !== undefined) dbUpdates.cancelled = updates.cancelled;
+  if (updates.cancelledDate !== undefined) dbUpdates.cancelled_date = updates.cancelledDate || null;
+  if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
+  if (updates.screenshot !== undefined) dbUpdates.screenshot = updates.screenshot || null;
+  if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
+
   const { error } = await supabase
     .from('subscriptions')
-    .update(mapSubscriptionToDb({ ...updates, id } as any))
+    .update(dbUpdates)
     .eq('id', id);
 
   if (error) {

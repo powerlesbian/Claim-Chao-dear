@@ -35,7 +35,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
   };
 
   const normalizeFrequency = (freq: string | undefined): 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one-off' => {
-    if (!freq) return 'monthly';
+    if (!freq || !freq.trim()) return 'one-off'; // Changed default from 'monthly' to 'one-off'
     const normalized = freq.toLowerCase().trim();
     if (normalized === 'one-off' || normalized === 'oneoff' || normalized === 'once') {
       return 'one-off';
@@ -44,7 +44,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
     if (normalized.includes('week')) return 'weekly';
     if (normalized.includes('month')) return 'monthly';
     if (normalized.includes('year')) return 'yearly';
-    return 'monthly';
+    return 'one-off'; // Changed fallback default as well
   };
 
   const parseCSV = (text: string): Omit<Subscription, 'id' | 'createdAt'>[] => {
@@ -54,7 +54,7 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
     }
 
     const headers = parseCSVLine(lines[0]);
-    const requiredHeaders = ['Name', 'Amount', 'Currency', 'Frequency', 'Start Date'];
+    const requiredHeaders = ['Name', 'Amount', 'Start Date'];
 
     const headerCheck = requiredHeaders.every(h => headers.includes(h));
     if (!headerCheck) {
@@ -83,8 +83,15 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
 
       const name = values[nameIndex];
       const amount = parseFloat(values[amountIndex]);
-      const currency = values[currencyIndex] as 'HKD' | 'SGD' | 'USD';
-      const frequency = normalizeFrequency(values[frequencyIndex]);
+
+      // Default to 'HKD' if currency is missing or invalid
+      const rawCurrency = currencyIndex >= 0 ? values[currencyIndex]?.trim() : '';
+      const currency = (['HKD', 'SGD', 'USD'].includes(rawCurrency) ? rawCurrency : 'HKD') as 'HKD' | 'SGD' | 'USD';
+    
+    // Default to 'one-off' if frequency is missing (handled in normalizeFrequency)
+      const rawFrequency = frequencyIndex >= 0 ? values[frequencyIndex] : '';
+      const frequency = normalizeFrequency(rawFrequency);
+
       const startDate = values[startDateIndex];
       const category = categoryIndex >= 0 && values[categoryIndex]
         ? values[categoryIndex]
@@ -97,10 +104,6 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
         continue;
       }
 
-      if (!['HKD', 'SGD', 'USD'].includes(currency)) {
-        continue;
-      }
-
       subscriptions.push({
         name,
         amount,
@@ -110,6 +113,8 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
         category,
         notes,
         cancelled: false,
+        user_id: '',
+        tags: []
       });
     }
 
@@ -192,8 +197,8 @@ export default function CSVImport({ onImport, onCancel }: CSVImportProps) {
               <div className="text-gray-600">Example: Netflix,119.00,HKD,Monthly,2026-01-01,Entertainment</div>
             </div>
             <p className="text-sm text-gray-600 mt-2">
-              <strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off<br />
-              <strong>Currency:</strong> HKD, SGD, or USD<br />
+              <strong>Frequency:</strong> Daily, Weekly, Monthly, Yearly, or One-off (default)<br />
+              <strong>Currency:</strong> HKD, SGD, or USD (defaults to HKD)<br />
               <strong>Category (optional):</strong> Any category from your list (defaults to &quot;Other&quot;)
             </p>
           </div>
