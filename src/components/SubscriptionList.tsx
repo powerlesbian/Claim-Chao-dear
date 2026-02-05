@@ -5,6 +5,8 @@ import { formatCurrency, formatDate, calculateNextPaymentDate } from '../utils/d
 import { supabase } from '../lib/supabase';
 import { Edit2, Trash2, CheckCircle, XCircle, Image, Filter, Square, CheckSquare } from 'lucide-react';
 
+const UNCATEGORIZED = 'Not Yet Defined';
+
 interface SubscriptionListProps {
   subscriptions: Subscription[];
   duplicateIds?: Set<string>;
@@ -32,7 +34,6 @@ export default function SubscriptionList({
 
   useEffect(() => {
     fetchCategories();
-    // Reset pagination when subscriptions change
     setDisplayedCount(100);
   }, [subscriptions.length]);
 
@@ -50,6 +51,14 @@ export default function SubscriptionList({
     }
   };
 
+  // Helper to get display category
+  const getDisplayCategory = (sub: Subscription): string => {
+    return sub.category && sub.category.trim() !== '' ? sub.category : UNCATEGORIZED;
+  };
+
+  // Check if any subscriptions are uncategorized
+  const hasUncategorized = subscriptions.some(sub => !sub.category || sub.category.trim() === '');
+
   if (subscriptions.length === 0) {
     return (
       <div className="text-center py-12">
@@ -61,12 +70,13 @@ export default function SubscriptionList({
 
   const filteredSubscriptions = selectedCategory === 'All'
     ? subscriptions
-    : subscriptions.filter(sub => sub.category === selectedCategory);
+    : selectedCategory === UNCATEGORIZED
+      ? subscriptions.filter(sub => !sub.category || sub.category.trim() === '')
+      : subscriptions.filter(sub => sub.category === selectedCategory);
 
   const activeSubscriptions = filteredSubscriptions.filter(sub => !sub.cancelled);
   const cancelledSubscriptions = filteredSubscriptions.filter(sub => sub.cancelled);
 
-  // Apply pagination
   const displayedActive = activeSubscriptions.slice(0, displayedCount);
   const displayedCancelled = cancelledSubscriptions.slice(0, displayedCount - displayedActive.length);
   
@@ -84,6 +94,9 @@ export default function SubscriptionList({
           className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         >
           <option value="All">All Categories</option>
+          {hasUncategorized && (
+            <option value={UNCATEGORIZED}>{UNCATEGORIZED}</option>
+          )}
           {categories.map((cat) => (
             <option key={cat.id} value={cat.name}>
               {cat.name}
@@ -105,6 +118,7 @@ export default function SubscriptionList({
               <SubscriptionCard
                 key={subscription.id}
                 subscription={subscription}
+                displayCategory={getDisplayCategory(subscription)}
                 isDuplicate={duplicateIds.has(subscription.id)}
                 isSelected={selectedIds.has(subscription.id)}
                 onToggleSelect={onToggleSelect}
@@ -126,6 +140,7 @@ export default function SubscriptionList({
               <SubscriptionCard
                 key={subscription.id}
                 subscription={subscription}
+                displayCategory={getDisplayCategory(subscription)}
                 isDuplicate={duplicateIds.has(subscription.id)}
                 onEdit={onEdit}
                 onDelete={onDelete}
@@ -164,6 +179,7 @@ export default function SubscriptionList({
 
 function SubscriptionCard({
   subscription,
+  displayCategory,
   isDuplicate = false,
   isSelected = false,
   onToggleSelect,
@@ -173,6 +189,7 @@ function SubscriptionCard({
   onViewScreenshot
 }: {
   subscription: Subscription;
+  displayCategory: string;
   isDuplicate?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -184,6 +201,8 @@ function SubscriptionCard({
   const nextPayment = !subscription.cancelled
     ? calculateNextPaymentDate(subscription.startDate, subscription.frequency)
     : null;
+
+  const isUncategorized = displayCategory === UNCATEGORIZED;
 
   return (
     <div className={`rounded-lg border p-4 shadow-sm hover:shadow-md transition-shadow ${
@@ -205,10 +224,14 @@ function SubscriptionCard({
           </button>
         )}
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h4 className="text-lg font-semibold text-gray-900">{subscription.name}</h4>
-            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
-              {subscription.category}
+            <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+              isUncategorized
+                ? 'bg-gray-100 text-gray-600 italic'
+                : 'bg-blue-100 text-blue-800'
+            }`}>
+              {displayCategory}
             </span>
             {isDuplicate && (
               <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs rounded-full font-medium">
