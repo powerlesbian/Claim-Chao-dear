@@ -62,17 +62,22 @@ export const formatDate = (date: string | Date): string => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-export const formatCurrency = (amount: number, currency: 'HKD' | 'SGD' | 'USD' = 'HKD'): string => {
-  const currencySymbols = {
+export const formatCurrency = (amount: number, currency: string = 'HKD'): string => {
+  const currencySymbols: Record<string, string> = {
     HKD: 'HK$',
     SGD: 'S$',
-    USD: 'US$'
+    USD: 'US$',
+    MYR: 'RM',
+    GBP: '£',
+    CNY: '¥',
+    EUR: '€',
   };
 
+  const symbol = currencySymbols[currency] ?? currency;
   const formatted = amount.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 
-  return `${currencySymbols[currency]}${formatted}`;
+  return `${symbol}${formatted}`;
 };

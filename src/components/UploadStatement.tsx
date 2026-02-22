@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { Upload, X, Image as ImageIcon, FileText, CheckCircle, Circle, AlertCircle, RefreshCw } from 'lucide-react';
-import { parsePDF } from '../utils/pdfParser';
 import { convertTransactionsToSubscriptions, DetectedSubscription } from '../utils/subscriptionDetector';
-import { Subscription, CurrencyType } from '../types';
+import { Subscription } from '../types';
 import { formatCurrency } from '../utils/dates';
-import { Transaction } from '../utils/pdfParser';
 
 interface UploadStatementProps {
   onUpload: (screenshot: string) => void;

@@ -32,7 +32,14 @@ export const getLocalStorageSubscriptions = (): Subscription[] => {
     if (!data) return [];
 
     const parsed = JSON.parse(data) as LegacySubscription[];
-    return parsed;
+    return parsed.map(sub => ({
+      ...sub,
+      currency: sub.currency as import('../types').CurrencyType,
+      frequency: sub.frequency as import('../types').FrequencyType,
+      user_id: '',
+      category: 'Other',
+      tags: ['Personal'],
+    }));
   } catch (error) {
     console.error('Error reading localStorage:', error);
     return [];

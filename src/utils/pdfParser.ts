@@ -475,12 +475,12 @@ export async function parseAmexPDF(dataUrl: string): Promise<Transaction[]> {
 }
 
 // Legacy functions for backward compatibility
-export function parseTransactionsFromText(text: string): Transaction[] {
+export function parseTransactionsFromText(_text: string): Transaction[] {
   console.log('Using legacy text parser as fallback');
   return [];
 }
 
-export function parseAmexStatement(text: string): Transaction[] {
+export function parseAmexStatement(_text: string): Transaction[] {
   console.log('Using legacy AMEX parser as fallback');
   return [];
 }

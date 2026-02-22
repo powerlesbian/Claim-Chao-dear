@@ -1,5 +1,5 @@
 export type FrequencyType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one-off';
-export type CurrencyType = 'HKD' | 'SGD' | 'USD';
+export type CurrencyType = 'HKD' | 'SGD' | 'USD' | 'MYR' | 'GBP' | 'CNY' | 'EUR';
 export type SortOption = 'alphabetical' | 'value-high' | 'value-low' | 'recent';
 export type UserRole = 'admin' | 'user';
 

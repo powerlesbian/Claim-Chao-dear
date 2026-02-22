@@ -1,5 +1,4 @@
-import { AlertCircle, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { AlertCircle } from 'lucide-react';
 
 interface DuplicateWarningProps {
   duplicateIds: Set<string>;
@@ -7,27 +6,11 @@ interface DuplicateWarningProps {
   onMarkNotDuplicate?: (id: string) => void;
 }
 
-export default function DuplicateWarning({ 
-  duplicateIds, 
+export default function DuplicateWarning({
+  duplicateIds,
   visible,
-  onMarkNotDuplicate 
 }: DuplicateWarningProps) {
   if (!visible || duplicateIds.size === 0) return null;
-
-  const handleMarkNotDuplicate = async (id: string) => {
-    try {
-      await supabase
-        .from('subscriptions')
-        .update({ markedAsNotDuplicate: true })
-        .eq('id', id);
-      
-      if (onMarkNotDuplicate) {
-        onMarkNotDuplicate(id);
-      }
-    } catch (error) {
-      console.error('Error marking as not duplicate:', error);
-    }
-  };
 
   return (
     <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-lg">

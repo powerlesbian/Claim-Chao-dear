@@ -1,11 +1,8 @@
-import { Subscription } from '../types';
-import { supabase } from '../lib/supabase';
-
 export function useSubscriptionActions(
-  addOne: (data: any) => Promise<any>,
-  update: (id: string, data: any) => Promise<boolean>,
-  remove: (id: string) => Promise<void>,
-  reload: () => Promise<void>,
+  _addOne: (data: any) => Promise<any>,
+  _update: (id: string, data: any) => Promise<boolean>,
+  remove: (id: string) => Promise<boolean>,
+  _reload: () => Promise<void>,
   setToast: (msg: string) => void
 ) {
   const handleDeleteSelected = async (

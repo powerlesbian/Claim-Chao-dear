@@ -1,8 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Plus, Upload, LogOut, FileUp, Shield, Settings, Users } from 'lucide-react';
 import { Subscription, DEFAULT_TAGS } from './types';
 import { formatCurrency } from './utils/dates';
-import { convertCurrency } from './utils/currency';
 import { exportToCSV } from './utils/csv';
 import { useAuth } from './contexts/AuthContext';
 import { useSubscriptions } from './hooks/useSubscriptions';
@@ -503,8 +502,8 @@ function ViewControls({
   totalCount,
   onSelectAll,
 }: {
-  view: string;
-  onViewChange: (view: string) => void;
+  view: 'upcoming' | 'all' | 'admin';
+  onViewChange: (view: 'upcoming' | 'all' | 'admin') => void;
   sortOption: any;
   onSortChange: (sort: any) => void;
   searchQuery: string;

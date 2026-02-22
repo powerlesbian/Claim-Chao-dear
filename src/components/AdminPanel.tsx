@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Users, DollarSign, TrendingUp, Calendar, Search, Trash2, Eye, Tag, BarChart3, Shield } from 'lucide-react';
 import { formatCurrency, calculateNextPaymentDate } from '../utils/dates';
+import { FrequencyType, CurrencyType } from '../types';
 import ScreenshotModal from './ScreenshotModal';
 import CategoryManager from './CategoryManager';
 import ClaimsDashboard from './ClaimsDashboard';
@@ -328,7 +329,7 @@ export function AdminPanel() {
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
                                 {user.subscriptions.map(sub => {
-                                  const nextPayment = !sub.cancelled ? calculateNextPaymentDate(sub.start_date, sub.frequency) : null;
+                                  const nextPayment = !sub.cancelled ? calculateNextPaymentDate(sub.start_date, sub.frequency as FrequencyType) : null;
                                   return (
                                     <tr key={sub.id} className="hover:bg-gray-50">
                                       <td className="px-4 py-4 whitespace-nowrap">
@@ -339,7 +340,7 @@ export function AdminPanel() {
                                       </td>
                                       <td className="px-4 py-4 whitespace-nowrap">
                                         <div className="text-sm text-gray-900">
-                                          {formatCurrency(sub.amount, sub.currency)}
+                                          {formatCurrency(sub.amount, sub.currency as CurrencyType)}
                                         </div>
                                       </td>
                                       <td className="px-4 py-4 whitespace-nowrap">

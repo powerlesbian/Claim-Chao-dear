@@ -1,5 +1,5 @@
 import { DollarSign, List, Calendar } from 'lucide-react';
-import { CurrencyType, UpcomingPayment } from '../types';
+import { CurrencyType } from '../types';
 import { formatCurrency } from '../utils/dates';
 
 interface StatsCardsProps {

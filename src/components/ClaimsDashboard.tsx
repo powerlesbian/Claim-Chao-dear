@@ -60,7 +60,7 @@ export default function ClaimsDashboard() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const newExpensesLast30Days = expenses.filter(
-      (exp) => new Date(exp.created_at) > thirtyDaysAgo && !exp.cancelled
+      (exp) => new Date(exp.createdAt) > thirtyDaysAgo && !exp.cancelled
     ).length;
 
     const byCategory: { [key: string]: { count: number; totalAmount: number } } = {};
@@ -294,7 +294,7 @@ export default function ClaimsDashboard() {
                     </td>
                     <td className="px-4 py-3 text-gray-600 capitalize">{expense.frequency}</td>
                     <td className="px-4 py-3 text-gray-600">
-                      {formatDate(expense.created_at)}
+                      {formatDate(expense.createdAt)}
                     </td>
                   </tr>
                 ))}
